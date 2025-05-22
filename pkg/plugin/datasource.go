@@ -23,14 +23,38 @@ var (
 	_ instancemgmt.InstanceDisposer = (*Datasource)(nil)
 )
 
-// NewDatasource creates a new datasource instance.
-func NewDatasource(_ context.Context, _ backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-	return &Datasource{}, nil
-}
-
 // Datasource is an example datasource which can respond to data queries, reports
 // its health and has streaming skills.
-type Datasource struct{}
+type Datasource struct {
+	clientID     string
+	clientSecret string
+	baseURL      string
+}
+
+// DatasourceSettings holds the config from plugin.json
+type DatasourceSettings struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	BaseURL      string `json:"base_url"`
+}
+
+// NewDatasource creates a new datasource instance.
+func NewDatasource(_ context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+	var dsSettings DatasourceSettings
+	if err := json.Unmarshal(settings.JSONData, &dsSettings); err != nil {
+		return nil, fmt.Errorf("failed to parse datasource settings: %w", err)
+	}
+	if settings.DecryptedSecureJSONData != nil {
+		if v, ok := settings.DecryptedSecureJSONData["client_secret"]; ok {
+			dsSettings.ClientSecret = v
+		}
+	}
+	return &Datasource{
+		clientID:     dsSettings.ClientID,
+		clientSecret: dsSettings.ClientSecret,
+		baseURL:      dsSettings.BaseURL,
+	}, nil
+}
 
 // Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
 // created. As soon as datasource settings change detected by SDK old datasource instance will

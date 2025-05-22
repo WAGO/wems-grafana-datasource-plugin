@@ -9,61 +9,79 @@ export function ConfigEditor(props: Props) {
   const { onOptionsChange, options } = props;
   const { jsonData, secureJsonFields, secureJsonData } = options;
 
-  const onPathChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const onClientIdChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({
       ...options,
       jsonData: {
         ...jsonData,
-        path: event.target.value,
+        clientId: event.target.value,
       },
     });
   };
 
-  // Secure field (only sent to the backend)
-  const onAPIKeyChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const onBaseUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        baseUrl: event.target.value,
+      },
+    });
+  };
+
+  const onClientSecretChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({
       ...options,
       secureJsonData: {
-        apiKey: event.target.value,
+        clientSecret: event.target.value,
       },
     });
   };
 
-  const onResetAPIKey = () => {
+  const onResetClientSecret = () => {
     onOptionsChange({
       ...options,
       secureJsonFields: {
         ...options.secureJsonFields,
-        apiKey: false,
+        clientSecret: false,
       },
       secureJsonData: {
         ...options.secureJsonData,
-        apiKey: '',
+        clientSecret: '',
       },
     });
   };
 
   return (
     <>
-      <InlineField label="Path" labelWidth={14} interactive tooltip={'Json field returned to frontend'}>
+      <InlineField label="Client-ID" labelWidth={16} interactive tooltip={'WEMS API Client ID'}>
         <Input
-          id="config-editor-path"
-          onChange={onPathChange}
-          value={jsonData.path}
-          placeholder="Enter the path, e.g. /api/v1"
+          id="config-editor-client-id"
+          onChange={onClientIdChange}
+          value={jsonData.clientId || ''}
+          placeholder="Enter your client ID"
           width={40}
         />
       </InlineField>
-      <InlineField label="API Key" labelWidth={14} interactive tooltip={'Secure json field (backend only)'}>
+      <InlineField label="Client Secret" labelWidth={16} interactive tooltip={'WEMS API Client Secret'}>
         <SecretInput
           required
-          id="config-editor-api-key"
-          isConfigured={secureJsonFields.apiKey}
-          value={secureJsonData?.apiKey}
-          placeholder="Enter your API key"
+          id="config-editor-client-secret"
+          isConfigured={secureJsonFields.clientSecret}
+          value={secureJsonData?.clientSecret || ''}
+          placeholder="Enter your client secret"
           width={40}
-          onReset={onResetAPIKey}
-          onChange={onAPIKeyChange}
+          onReset={onResetClientSecret}
+          onChange={onClientSecretChange}
+        />
+      </InlineField>
+      <InlineField label="Base URL" labelWidth={16} interactive tooltip={'WEMS API Base URL'}>
+        <Input
+          id="config-editor-base-url"
+          onChange={onBaseUrlChange}
+          value={jsonData.baseUrl || ''}
+          placeholder="https://c1.api.wago.com/wems"
+          width={40}
         />
       </InlineField>
     </>
