@@ -23,13 +23,13 @@ export interface DataSourceResponse {
  * These are options configured for each DataSource instance
  */
 export interface MyDataSourceOptions extends DataSourceJsonData {
-  clientId?: string;
-  baseUrl?: string;
+  client_id?: string;
+  base_url?: string;
 }
 
 /**
  * Value that is used in the backend, but never sent over HTTP to the frontend
  */
 export interface MySecureJsonData {
-  clientSecret?: string;
+  client_secret?: string;
 }

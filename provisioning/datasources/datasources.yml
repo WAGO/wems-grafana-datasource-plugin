@@ -9,6 +9,7 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      path: '/resources'
+      client_id: 'your-client-id'
+      base_url: 'https://c1.api.wago.com/wems'
     secureJsonData:
-      apiKey: 'api-key'
+      client_secret: 'your-client-secret'

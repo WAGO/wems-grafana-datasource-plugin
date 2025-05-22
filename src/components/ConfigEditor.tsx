@@ -14,7 +14,7 @@ export function ConfigEditor(props: Props) {
       ...options,
       jsonData: {
         ...jsonData,
-        clientId: event.target.value,
+        client_id: event.target.value,
       },
     });
   };
@@ -24,7 +24,7 @@ export function ConfigEditor(props: Props) {
       ...options,
       jsonData: {
         ...jsonData,
-        baseUrl: event.target.value,
+        base_url: event.target.value,
       },
     });
   };
@@ -33,7 +33,7 @@ export function ConfigEditor(props: Props) {
     onOptionsChange({
       ...options,
       secureJsonData: {
-        clientSecret: event.target.value,
+        client_secret: event.target.value,
       },
     });
   };
@@ -43,44 +43,44 @@ export function ConfigEditor(props: Props) {
       ...options,
       secureJsonFields: {
         ...options.secureJsonFields,
-        clientSecret: false,
+        client_secret: false,
       },
       secureJsonData: {
         ...options.secureJsonData,
-        clientSecret: '',
+        client_secret: '',
       },
     });
   };
 
   return (
     <>
-      <InlineField label="Client-ID" labelWidth={16} interactive tooltip={'WEMS API Client ID'}>
+      <InlineField label="Client ID" labelWidth={14} interactive tooltip={'WEMS API Client ID'}>
         <Input
           id="config-editor-client-id"
           onChange={onClientIdChange}
-          value={jsonData.clientId || ''}
+          value={jsonData.client_id || ''}
           placeholder="Enter your client ID"
           width={40}
         />
       </InlineField>
-      <InlineField label="Client Secret" labelWidth={16} interactive tooltip={'WEMS API Client Secret'}>
+      <InlineField label="Client Secret" labelWidth={14} interactive tooltip={'WEMS API Client Secret'}>
         <SecretInput
           required
           id="config-editor-client-secret"
-          isConfigured={secureJsonFields.clientSecret}
-          value={secureJsonData?.clientSecret || ''}
+          isConfigured={secureJsonFields.client_secret}
+          value={secureJsonData?.client_secret || ''}
           placeholder="Enter your client secret"
           width={40}
           onReset={onResetClientSecret}
           onChange={onClientSecretChange}
         />
       </InlineField>
-      <InlineField label="Base URL" labelWidth={16} interactive tooltip={'WEMS API Base URL'}>
+      <InlineField label="Base URL" labelWidth={14} interactive tooltip={'WEMS API Base URL (optional, defaults to https://c1.api.wago.com/wems)'}>
         <Input
           id="config-editor-base-url"
           onChange={onBaseUrlChange}
-          value={jsonData.baseUrl || ''}
-          placeholder="https://c1.api.wago.com/wems"
+          value={jsonData.base_url || ''}
+          placeholder="https://c1.api.wago.com/wems (default)"
           width={40}
         />
       </InlineField>
