@@ -341,3 +341,56 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 		Message: "Data source is working",
 	}, nil
 }
+
+// CallResource handles resource calls from the frontend (e.g., /resources/endpoint-list)
+func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	if req.Path != "endpoint-list" {
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusNotFound,
+			Body:   []byte("Not found"),
+		})
+	}
+
+	// Build WEMS endpoint list URL
+	url := d.baseURL + "/v1/endpoint/"
+	request, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusInternalServerError,
+			Body:   []byte("Failed to create request: " + err.Error()),
+		})
+	}
+	request.Header.Set("Authorization", "Bearer "+d.token)
+	request.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(request)
+	if err != nil {
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusInternalServerError,
+			Body:   []byte("Request failed: " + err.Error()),
+		})
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusInternalServerError,
+			Body:   []byte("Failed to read response: " + err.Error()),
+		})
+	}
+
+	if resp.StatusCode != 200 {
+		return sender.Send(&backend.CallResourceResponse{
+			Status: resp.StatusCode,
+			Body:   body,
+		})
+	}
+
+	// Return the raw JSON array to the frontend
+	return sender.Send(&backend.CallResourceResponse{
+		Status: http.StatusOK,
+		Body:   body,
+	})
+}
