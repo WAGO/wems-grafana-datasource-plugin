@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -103,7 +104,7 @@ func NewDatasource(_ context.Context, settings backend.DataSourceInstanceSetting
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("WEMS token request failed: %s %s", resp.Status, string(bodyBytes))
 	}
-	
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read token response: %w", err)
@@ -157,33 +158,121 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	return response, nil
 }
 
-type queryModel struct{}
+type WEMSQueryModel struct {
+	EndpointID        string `json:"endpoint_id"`
+	ApplianceID       string `json:"appliance_id"`
+	ServiceURI        string `json:"service_uri"`
+	DataPoint         string `json:"data_point"`
+	AggregateFunction string `json:"aggregate_function,omitempty"`
+	CreateEmptyValues *bool  `json:"create_empty_values,omitempty"`
+}
 
-func (d *Datasource) query(_ context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+type TimeSeriesDataPoint struct {
+	Time  int64       `json:"time"`
+	Value interface{} `json:"value"`
+}
+
+func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	var response backend.DataResponse
 
-	// Unmarshal the JSON into our queryModel.
-	var qm queryModel
-
-	err := json.Unmarshal(query.JSON, &qm)
-	if err != nil {
+	// Unmarshal the JSON into our query model (only for endpoint/appliance/service/datapoint)
+	var qm WEMSQueryModel
+	if err := json.Unmarshal(query.JSON, &qm); err != nil {
 		return backend.ErrDataResponse(backend.StatusBadRequest, fmt.Sprintf("json unmarshal: %v", err.Error()))
 	}
 
-	// create data frame response.
-	// For an overview on data frames and how grafana handles them:
-	// https://grafana.com/developers/plugin-tools/introduction/data-frames
-	frame := data.NewFrame("response")
+	// Validate required fields
+	if qm.EndpointID == "" || qm.ApplianceID == "" || qm.ServiceURI == "" || qm.DataPoint == "" {
+		return backend.ErrDataResponse(backend.StatusBadRequest, "Missing required query fields: endpoint_id, appliance_id, service_uri, data_point")
+	}
 
-	// add fields.
-	frame.Fields = append(frame.Fields,
-		data.NewField("time", nil, []time.Time{query.TimeRange.From, query.TimeRange.To}),
-		data.NewField("values", nil, []int64{10, 20}),
+	// Build the WEMS API URL
+	url := fmt.Sprintf("%s/v1/endpoint/%s/series/%s/%s/%s", d.baseURL, qm.EndpointID, qm.ApplianceID, qm.ServiceURI, qm.DataPoint)
+
+	// Build query params using backend.DataQuery fields
+	params := make(map[string]string)
+	params["from"] = fmt.Sprintf("%d", query.TimeRange.From.Unix())
+	params["to"] = fmt.Sprintf("%d", query.TimeRange.To.Unix())
+	if query.MaxDataPoints > 0 {
+		params["limit"] = fmt.Sprintf("%d", query.MaxDataPoints)
+	}
+	if query.Interval > 0 {
+		params["aggregateInterval"] = fmt.Sprintf("%ds", int(query.Interval.Seconds()))
+	}
+	if qm.AggregateFunction != "" {
+		params["aggregateFunction"] = qm.AggregateFunction
+	}
+	if qm.CreateEmptyValues != nil {
+		params["createEmptyValues"] = fmt.Sprintf("%v", *qm.CreateEmptyValues)
+	}
+
+	// Build the full URL with query params
+	qstr := ""
+	for k, v := range params {
+		if qstr == "" {
+			qstr = "?"
+		} else {
+			qstr += "&"
+		}
+		qstr += fmt.Sprintf("%s=%s", k, v)
+	}
+	fullURL := url + qstr
+
+	// Prepare HTTP request
+	req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
+	if err != nil {
+		return backend.ErrDataResponse(backend.StatusInternal, "Failed to create request: "+err.Error())
+	}
+	req.Header.Set("Authorization", "Bearer "+d.token)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return backend.ErrDataResponse(backend.StatusInternal, "Request failed: "+err.Error())
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return backend.ErrDataResponse(backend.StatusInternal, fmt.Sprintf("WEMS API error: %s %s", resp.Status, string(bodyBytes)))
+	}
+
+	var points []TimeSeriesDataPoint
+	if err := json.NewDecoder(resp.Body).Decode(&points); err != nil {
+		return backend.ErrDataResponse(backend.StatusInternal, "Failed to decode WEMS response: "+err.Error())
+	}
+
+	// Convert to Grafana data frame
+	times := make([]time.Time, 0, len(points))
+	values := make([]float64, 0, len(points))
+	for _, p := range points {
+		times = append(times, time.Unix(p.Time, 0))
+		// Try to convert value to float64
+		switch v := p.Value.(type) {
+		case float64:
+			values = append(values, v)
+		case int:
+			values = append(values, float64(v))
+		case int64:
+			values = append(values, float64(v))
+		case string:
+			// Try to parse string as float
+			f, err := strconv.ParseFloat(v, 64)
+			if err == nil {
+				values = append(values, f)
+			} else {
+				values = append(values, 0)
+			}
+		default:
+			values = append(values, 0)
+		}
+	}
+
+	frame := data.NewFrame("response",
+		data.NewField("time", nil, times),
+		data.NewField("value", nil, values),
 	)
-
-	// add the frames to the response.
 	response.Frames = append(response.Frames, frame)
-
 	return response
 }
 

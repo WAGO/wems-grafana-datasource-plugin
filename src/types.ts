@@ -2,13 +2,15 @@ import { DataSourceJsonData } from '@grafana/data';
 import { DataQuery } from '@grafana/schema';
 
 export interface MyQuery extends DataQuery {
-  queryText?: string;
-  constant: number;
+  endpoint_id: string;
+  appliance_id: string;
+  service_uri: string;
+  data_point: string;
+  aggregate_function?: string;
+  create_empty_values?: boolean;
 }
 
-export const DEFAULT_QUERY: Partial<MyQuery> = {
-  constant: 6.5,
-};
+export const DEFAULT_QUERY: Partial<MyQuery> = {};
 
 export interface DataPoint {
   Time: number;

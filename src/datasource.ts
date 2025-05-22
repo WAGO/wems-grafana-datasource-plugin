@@ -1,5 +1,5 @@
 import { DataSourceInstanceSettings, CoreApp, ScopedVars } from '@grafana/data';
-import { DataSourceWithBackend, getTemplateSrv } from '@grafana/runtime';
+import { DataSourceWithBackend } from '@grafana/runtime';
 
 import { MyQuery, MyDataSourceOptions, DEFAULT_QUERY } from './types';
 
@@ -13,14 +13,16 @@ export class DataSource extends DataSourceWithBackend<MyQuery, MyDataSourceOptio
   }
 
   applyTemplateVariables(query: MyQuery, scopedVars: ScopedVars) {
+    // No queryText field anymore; just return the query as-is or apply template replacement to relevant fields if needed
     return {
       ...query,
-      queryText: getTemplateSrv().replace(query.queryText, scopedVars),
+      // Example: endpoint_id: getTemplateSrv().replace(query.endpoint_id, scopedVars),
+      // Add similar lines for other fields if you want template variable support
     };
   }
 
   filterQuery(query: MyQuery): boolean {
-    // if no query has been provided, prevent the query from being executed
-    return !!query.queryText;
+    // Only run query if required fields are present
+    return !!query.endpoint_id && !!query.appliance_id && !!query.service_uri && !!query.data_point;
   }
 }

@@ -1,5 +1,5 @@
-import React, { ChangeEvent } from 'react';
-import { InlineField, Input, Stack } from '@grafana/ui';
+import React from 'react';
+import { InlineField, Input } from '@grafana/ui';
 import { QueryEditorProps } from '@grafana/data';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, MyQuery } from '../types';
@@ -7,39 +7,34 @@ import { MyDataSourceOptions, MyQuery } from '../types';
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
 export function QueryEditor({ query, onChange, onRunQuery }: Props) {
-  const onQueryTextChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onChange({ ...query, queryText: event.target.value });
+  const onFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    onChange({ ...query, [field]: value === '' ? null : value });
   };
-
-  const onConstantChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onChange({ ...query, constant: parseFloat(event.target.value) });
-    // executes the query
-    onRunQuery();
+  const onBoolFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    onChange({ ...query, [field]: event.target.checked });
   };
-
-  const { queryText, constant } = query;
 
   return (
-    <Stack gap={0}>
-      <InlineField label="Constant">
-        <Input
-          id="query-editor-constant"
-          onChange={onConstantChange}
-          value={constant}
-          width={8}
-          type="number"
-          step="0.1"
-        />
+    <>
+      <InlineField label="Endpoint ID">
+        <Input value={query.endpoint_id || ''} onChange={onFieldChange('endpoint_id')} width={40} />
       </InlineField>
-      <InlineField label="Query Text" labelWidth={16} tooltip="Not used yet">
-        <Input
-          id="query-editor-query-text"
-          onChange={onQueryTextChange}
-          value={queryText || ''}
-          required
-          placeholder="Enter a query"
-        />
+      <InlineField label="Appliance ID">
+        <Input value={query.appliance_id || ''} onChange={onFieldChange('appliance_id')} width={40} />
       </InlineField>
-    </Stack>
+      <InlineField label="Service URI">
+        <Input value={query.service_uri || ''} onChange={onFieldChange('service_uri')} width={40} />
+      </InlineField>
+      <InlineField label="Data Point">
+        <Input value={query.data_point || ''} onChange={onFieldChange('data_point')} width={40} />
+      </InlineField>
+      <InlineField label="Aggregate Function (optional)">
+        <Input value={query.aggregate_function || ''} onChange={onFieldChange('aggregate_function')} width={20} placeholder="mean" />
+      </InlineField>
+      <InlineField label="Create Empty Values (optional)">
+        <input type="checkbox" checked={!!query.create_empty_values} onChange={onBoolFieldChange('create_empty_values')} />
+      </InlineField>
+    </>
   );
 }
