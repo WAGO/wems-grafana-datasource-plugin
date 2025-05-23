@@ -54,7 +54,7 @@ export function ConfigEditor(props: Props) {
 
   return (
     <>
-      <InlineField label="Client ID" labelWidth={14} interactive tooltip={'WEMS API Client ID'}>
+      <InlineField label="Client ID" labelWidth={18} interactive tooltip={'WEMS API Client ID'}>
         <Input
           id="config-editor-client-id"
           onChange={onClientIdChange}
@@ -63,7 +63,7 @@ export function ConfigEditor(props: Props) {
           width={40}
         />
       </InlineField>
-      <InlineField label="Client Secret" labelWidth={14} interactive tooltip={'WEMS API Client Secret'}>
+      <InlineField label="Client Secret" labelWidth={18} interactive tooltip={'WEMS API Client Secret'}>
         <SecretInput
           required
           id="config-editor-client-secret"
@@ -75,7 +75,7 @@ export function ConfigEditor(props: Props) {
           onChange={onClientSecretChange}
         />
       </InlineField>
-      <InlineField label="Base URL" labelWidth={14} interactive tooltip={'WEMS API Base URL (optional, defaults to https://c1.api.wago.com/wems)'}>
+      <InlineField label="Base URL" labelWidth={18} interactive tooltip={'WEMS API Base URL (optional, defaults to https://c1.api.wago.com/wems)'}>
         <Input
           id="config-editor-base-url"
           onChange={onBaseUrlChange}
