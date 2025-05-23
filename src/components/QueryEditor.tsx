@@ -11,10 +11,14 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [loadingEndpoints, setLoadingEndpoints] = useState(false);
   const [endpointError, setEndpointError] = useState<string | null>(null);
 
+  const [appliances, setAppliances] = useState<Array<SelectableValue<string>>>([]);
+  const [loadingAppliances, setLoadingAppliances] = useState(false);
+  const [applianceError, setApplianceError] = useState<string | null>(null);
+
+  // Fetch endpoints on mount
   useEffect(() => {
     setLoadingEndpoints(true);
     setEndpointError(null);
-    // Call backend proxy to fetch endpoints
     datasource
       .getResource('endpoint-list')
       .then((result: any) => {
@@ -31,12 +35,41 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       });
   }, [datasource]);
 
+  // Fetch appliances when endpoint_id changes
+  useEffect(() => {
+    if (!query.endpoint_id) {
+      setAppliances([]);
+      setApplianceError(null);
+      return;
+    }
+    setLoadingAppliances(true);
+    setApplianceError(null);
+    datasource
+      .getResource('appliance-list', { endpointId: query.endpoint_id })
+      .then((result: any) => {
+        const opts = (result || []).map((ap: any) => ({
+          label: ap.label || ap.id,
+          value: ap.id,
+        }));
+        setAppliances(opts);
+        setLoadingAppliances(false);
+      })
+      .catch((err: any) => {
+        setApplianceError('Failed to load appliances');
+        setLoadingAppliances(false);
+      });
+  }, [datasource, query.endpoint_id]);
+
   const onFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     onChange({ ...query, [field]: value === '' ? '' : value });
   };
   const onSelectEndpoint = (option: SelectableValue<string>) => {
-    onChange({ ...query, endpoint_id: option?.value ?? '' });
+    // Clear appliance_id if endpoint changes
+    onChange({ ...query, endpoint_id: option?.value ?? '', appliance_id: '' });
+  };
+  const onSelectAppliance = (option: SelectableValue<string>) => {
+    onChange({ ...query, appliance_id: option?.value ?? '' });
   };
   const onBoolFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...query, [field]: event.target.checked });
@@ -58,7 +91,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         </div>
       </InlineField>
       <InlineField label="Appliance ID">
-        <Input value={query.appliance_id || ''} onChange={onFieldChange('appliance_id')} width={40} />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Select
+            options={appliances}
+            value={appliances.find((a) => a.value === query.appliance_id) || null}
+            onChange={onSelectAppliance}
+            isLoading={loadingAppliances}
+            width={40}
+            placeholder={query.endpoint_id ? 'Select appliance...' : 'Select endpoint first'}
+            disabled={!query.endpoint_id}
+          />
+          {applianceError && <span style={{ color: 'red', marginLeft: 8 }}>{applianceError}</span>}
+        </div>
       </InlineField>
       <InlineField label="Service URI">
         <Input value={query.service_uri || ''} onChange={onFieldChange('service_uri')} width={40} />

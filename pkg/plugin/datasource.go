@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -342,55 +343,144 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 	}, nil
 }
 
-// CallResource handles resource calls from the frontend (e.g., /resources/endpoint-list)
+// CallResource handles resource calls from the frontend (e.g., /resources/endpoint-list, /resources/appliance-list)
 func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
-	if req.Path != "endpoint-list" {
-		return sender.Send(&backend.CallResourceResponse{
-			Status: http.StatusNotFound,
-			Body:   []byte("Not found"),
-		})
-	}
+	if req.Path == "endpoint-list" {
+		// Build WEMS endpoint list URL
+		url := d.baseURL + "/v1/endpoint/"
+		request, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to create request: " + err.Error()),
+			})
+		}
+		request.Header.Set("Authorization", "Bearer "+d.token)
+		request.Header.Set("Accept", "application/json")
 
-	// Build WEMS endpoint list URL
-	url := d.baseURL + "/v1/endpoint/"
-	request, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return sender.Send(&backend.CallResourceResponse{
-			Status: http.StatusInternalServerError,
-			Body:   []byte("Failed to create request: " + err.Error()),
-		})
-	}
-	request.Header.Set("Authorization", "Bearer "+d.token)
-	request.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 20 * time.Second}
+		resp, err := client.Do(request)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Request failed: " + err.Error()),
+			})
+		}
+		defer resp.Body.Close()
 
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(request)
-	if err != nil {
-		return sender.Send(&backend.CallResourceResponse{
-			Status: http.StatusInternalServerError,
-			Body:   []byte("Request failed: " + err.Error()),
-		})
-	}
-	defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to read response: " + err.Error()),
+			})
+		}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return sender.Send(&backend.CallResourceResponse{
-			Status: http.StatusInternalServerError,
-			Body:   []byte("Failed to read response: " + err.Error()),
-		})
-	}
+		if resp.StatusCode != 200 {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: resp.StatusCode,
+				Body:   body,
+			})
+		}
 
-	if resp.StatusCode != 200 {
 		return sender.Send(&backend.CallResourceResponse{
-			Status: resp.StatusCode,
+			Status: http.StatusOK,
 			Body:   body,
 		})
 	}
 
-	// Return the raw JSON array to the frontend
+	if req.Path == "appliance-list" {
+		endpointId := ""
+		if req.URL != "" {
+			if parsedUrl, err := url.Parse(req.URL); err == nil {
+				endpointId = parsedUrl.Query().Get("endpointId")
+			}
+		}
+		if endpointId == "" {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Missing endpointId parameter"),
+			})
+		}
+		url := fmt.Sprintf("%s/v1/endpoint/%s/description?includeApplianceConfiguration=false&draft=false", d.baseURL, endpointId)
+		req2, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to create request: " + err.Error()),
+			})
+		}
+		req2.Header.Set("Authorization", "Bearer "+d.token)
+		req2.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 20 * time.Second}
+		resp, err := client.Do(req2)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Request failed: " + err.Error()),
+			})
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to read response: " + err.Error()),
+			})
+		}
+		if resp.StatusCode != 200 {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: resp.StatusCode,
+				Body:   body,
+			})
+		}
+		// Parse and flatten appliances from processes
+		type appliance struct {
+			ID           string `json:"id"`
+			FriendlyName string `json:"friendlyName"`
+		}
+		type process struct {
+			ID         string      `json:"id"`
+			Name       string      `json:"name"`
+			Appliances []appliance `json:"appliances"`
+		}
+		type descResp struct {
+			Processes []process `json:"processes"`
+		}
+		var desc descResp
+		if err := json.Unmarshal(body, &desc); err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to parse appliances: " + err.Error()),
+			})
+		}
+		// Flatten appliances with process info
+		var result []map[string]string
+		for _, proc := range desc.Processes {
+			for _, app := range proc.Appliances {
+				label := app.FriendlyName
+				if label == "" {
+					label = app.ID
+				}
+				if proc.Name != "" {
+					label = fmt.Sprintf("%s (%s)", label, proc.Name)
+				}
+				result = append(result, map[string]string{
+					"id":    app.ID,
+					"label": label,
+				})
+			}
+		}
+		respBytes, _ := json.Marshal(result)
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusOK,
+			Body:   respBytes,
+		})
+	}
+
+	// Unknown resource
 	return sender.Send(&backend.CallResourceResponse{
-		Status: http.StatusOK,
-		Body:   body,
+		Status: http.StatusNotFound,
+		Body:   []byte("Not found"),
 	})
 }
