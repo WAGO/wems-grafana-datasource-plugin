@@ -478,6 +478,75 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		})
 	}
 
+	if req.Path == "service-list" {
+		endpointId := ""
+		applianceId := ""
+		if req.URL != "" {
+			if parsedUrl, err := url.Parse(req.URL); err == nil {
+				endpointId = parsedUrl.Query().Get("endpointId")
+				applianceId = parsedUrl.Query().Get("applianceId")
+			}
+		}
+		if endpointId == "" || applianceId == "" {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Missing endpointId or applianceId parameter"),
+			})
+		}
+		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s", d.baseURL, endpointId, applianceId)
+		req2, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to create request: " + err.Error()),
+			})
+		}
+		req2.Header.Set("Authorization", "Bearer "+d.token)
+		req2.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 20 * time.Second}
+		resp, err := client.Do(req2)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Request failed: " + err.Error()),
+			})
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to read response: " + err.Error()),
+			})
+		}
+		if resp.StatusCode != 200 {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: resp.StatusCode,
+				Body:   body,
+			})
+		}
+		// Parse JSON keys as service URIs
+		var raw map[string]interface{}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to parse service list: " + err.Error()),
+			})
+		}
+		var result []map[string]string
+		for k := range raw {
+			result = append(result, map[string]string{
+				"uri":   k,
+				"label": k,
+			})
+		}
+		respBytes, _ := json.Marshal(result)
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusOK,
+			Body:   respBytes,
+		})
+	}
+
 	// Unknown resource
 	return sender.Send(&backend.CallResourceResponse{
 		Status: http.StatusNotFound,
