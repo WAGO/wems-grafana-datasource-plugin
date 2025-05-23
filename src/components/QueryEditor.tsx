@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { InlineField, Input, Select } from '@grafana/ui';
+import { InlineField, Select } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, MyQuery } from '../types';
@@ -22,6 +22,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [dataPoints, setDataPoints] = useState<Array<SelectableValue<string>>>([]);
   const [loadingDataPoints, setLoadingDataPoints] = useState(false);
   const [dataPointError, setDataPointError] = useState<string | null>(null);
+
+  const aggregationOptions: Array<SelectableValue<string>> = [
+    { label: 'Mean', value: 'mean' },
+    { label: 'Median', value: 'median' },
+    { label: 'Min', value: 'min' },
+    { label: 'Max', value: 'max' },
+    { label: 'Sum', value: 'sum' },
+    { label: 'Count', value: 'count' },
+    { label: 'First', value: 'first' },
+    { label: 'Last', value: 'last' },
+    { label: 'Derivative', value: 'derivative' },
+  ];
 
   // Fetch endpoints on mount
   useEffect(() => {
@@ -122,10 +134,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       });
   }, [datasource, query.endpoint_id, query.appliance_id, query.service_uri]);
 
-  const onFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    onChange({ ...query, [field]: value === '' ? '' : value });
-  };
   const onSelectEndpoint = (option: SelectableValue<string>) => {
     // Clear appliance_id, service_uri, and data_point if endpoint changes
     onChange({ ...query, endpoint_id: option?.value ?? '', appliance_id: '', service_uri: '', data_point: '' });
@@ -202,8 +210,16 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           {dataPointError && <span style={{ color: 'red', marginLeft: 8 }}>{dataPointError}</span>}
         </div>
       </InlineField>
-      <InlineField label="Aggregate Function (optional)">
-        <Input value={query.aggregate_function || ''} onChange={onFieldChange('aggregate_function')} width={20} placeholder="mean" />
+      <InlineField label="Aggregate Function">
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Select
+            options={aggregationOptions}
+            value={aggregationOptions.find(opt => opt.value === (query.aggregate_function || 'mean'))}
+            onChange={opt => onChange({ ...query, aggregate_function: opt?.value || 'mean' })}
+            width={20}
+            placeholder="Select aggregation..."
+          />
+        </div>
       </InlineField>
       <InlineField label="Create Empty Values (optional)">
         <input type="checkbox" checked={!!query.create_empty_values} onChange={onBoolFieldChange('create_empty_values')} />
