@@ -19,6 +19,10 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [loadingServiceUris, setLoadingServiceUris] = useState(false);
   const [serviceUriError, setServiceUriError] = useState<string | null>(null);
 
+  const [dataPoints, setDataPoints] = useState<Array<SelectableValue<string>>>([]);
+  const [loadingDataPoints, setLoadingDataPoints] = useState(false);
+  const [dataPointError, setDataPointError] = useState<string | null>(null);
+
   // Fetch endpoints on mount
   useEffect(() => {
     setLoadingEndpoints(true);
@@ -89,19 +93,53 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       });
   }, [datasource, query.endpoint_id, query.appliance_id]);
 
+  // Fetch data points when endpoint_id, appliance_id, and service_uri change
+  useEffect(() => {
+    if (!query.endpoint_id || !query.appliance_id || !query.service_uri) {
+      setDataPoints([]);
+      setDataPointError(null);
+      return;
+    }
+    setLoadingDataPoints(true);
+    setDataPointError(null);
+    datasource
+      .getResource('datapoint-list', {
+        endpointId: query.endpoint_id,
+        applianceId: query.appliance_id,
+        serviceUri: query.service_uri,
+      })
+      .then((result: any) => {
+        const opts = (result?.dataPoints ? Object.keys(result.dataPoints) : []).map((dp) => ({
+          label: dp,
+          value: dp,
+        }));
+        setDataPoints(opts);
+        setLoadingDataPoints(false);
+      })
+      .catch((err: any) => {
+        setDataPointError('Failed to load data points');
+        setLoadingDataPoints(false);
+      });
+  }, [datasource, query.endpoint_id, query.appliance_id, query.service_uri]);
+
   const onFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     onChange({ ...query, [field]: value === '' ? '' : value });
   };
   const onSelectEndpoint = (option: SelectableValue<string>) => {
-    // Clear appliance_id if endpoint changes
-    onChange({ ...query, endpoint_id: option?.value ?? '', appliance_id: '' });
+    // Clear appliance_id, service_uri, and data_point if endpoint changes
+    onChange({ ...query, endpoint_id: option?.value ?? '', appliance_id: '', service_uri: '', data_point: '' });
   };
   const onSelectAppliance = (option: SelectableValue<string>) => {
-    onChange({ ...query, appliance_id: option?.value ?? '' });
+    // Clear service_uri and data_point if appliance changes
+    onChange({ ...query, appliance_id: option?.value ?? '', service_uri: '', data_point: '' });
   };
   const onSelectServiceUri = (option: SelectableValue<string>) => {
-    onChange({ ...query, service_uri: option?.value ?? '' });
+    // Clear data_point if service_uri changes
+    onChange({ ...query, service_uri: option?.value ?? '', data_point: '' });
+  };
+  const onSelectDataPoint = (option: SelectableValue<string>) => {
+    onChange({ ...query, data_point: option?.value ?? '' });
   };
   const onBoolFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...query, [field]: event.target.checked });
@@ -151,7 +189,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         </div>
       </InlineField>
       <InlineField label="Data Point">
-        <Input value={query.data_point || ''} onChange={onFieldChange('data_point')} width={40} />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Select
+            options={dataPoints}
+            value={dataPoints.find((d) => d.value === query.data_point) || null}
+            onChange={onSelectDataPoint}
+            isLoading={loadingDataPoints}
+            width={40}
+            placeholder={query.endpoint_id && query.appliance_id && query.service_uri ? 'Select data point...' : 'Select endpoint, appliance, and service URI first'}
+            disabled={!query.endpoint_id || !query.appliance_id || !query.service_uri}
+          />
+          {dataPointError && <span style={{ color: 'red', marginLeft: 8 }}>{dataPointError}</span>}
+        </div>
       </InlineField>
       <InlineField label="Aggregate Function (optional)">
         <Input value={query.aggregate_function || ''} onChange={onFieldChange('aggregate_function')} width={20} placeholder="mean" />

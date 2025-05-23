@@ -547,6 +547,61 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		})
 	}
 
+	if req.Path == "datapoint-list" {
+		endpointId := ""
+		applianceId := ""
+		serviceUri := ""
+		if req.URL != "" {
+			if parsedUrl, err := url.Parse(req.URL); err == nil {
+				endpointId = parsedUrl.Query().Get("endpointId")
+				applianceId = parsedUrl.Query().Get("applianceId")
+				serviceUri = parsedUrl.Query().Get("serviceUri")
+			}
+		}
+		if endpointId == "" || applianceId == "" || serviceUri == "" {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Missing endpointId, applianceId, or serviceUri parameter"),
+			})
+		}
+		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s/%s", d.baseURL, endpointId, applianceId, serviceUri)
+		req2, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to create request: " + err.Error()),
+			})
+		}
+		req2.Header.Set("Authorization", "Bearer "+d.token)
+		req2.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 20 * time.Second}
+		resp, err := client.Do(req2)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Request failed: " + err.Error()),
+			})
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to read response: " + err.Error()),
+			})
+		}
+		if resp.StatusCode != 200 {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: resp.StatusCode,
+				Body:   body,
+			})
+		}
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusOK,
+			Body:   body,
+		})
+	}
+
 	// Unknown resource
 	return sender.Send(&backend.CallResourceResponse{
 		Status: http.StatusNotFound,
