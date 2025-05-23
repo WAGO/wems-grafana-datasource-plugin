@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
-	"github.com/wago/wems-grafana-plugin/pkg/models"
 )
 
 const DefaultBaseURL = "https://c1.api.wago.com/wems"
@@ -38,6 +38,7 @@ type Datasource struct {
 	baseURL      string
 	token        string
 	tokenExpiry  time.Time
+	mutex        sync.Mutex
 }
 
 // TokenRequest is the payload for the WEMS token endpoint
@@ -79,57 +80,61 @@ func NewDatasource(_ context.Context, settings backend.DataSourceInstanceSetting
 	if len(dsSettings.BaseURL) > 0 && dsSettings.BaseURL[len(dsSettings.BaseURL)-1] == '/' {
 		dsSettings.BaseURL = dsSettings.BaseURL[:len(dsSettings.BaseURL)-1]
 	}
-	// Prepare token request
+	ds := &Datasource{
+		clientID:     dsSettings.ClientID,
+		clientSecret: dsSettings.ClientSecret,
+		baseURL:      dsSettings.BaseURL,
+	}
+	// Get initial token
+	if err := ds.getTokenIfNeeded(context.Background()); err != nil {
+		return nil, err
+	}
+	return ds, nil
+}
+
+// getTokenIfNeeded checks token expiration and refreshes the token if needed.
+func (d *Datasource) getTokenIfNeeded(ctx context.Context) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	if d.token != "" && time.Now().Before(d.tokenExpiry.Add(-1*time.Minute)) {
+		return nil // Token is still valid (with 1 min buffer)
+	}
+	// Request new token
 	tokenReq := TokenRequest{
 		ApplicationComponents: map[string][]string{},
-		ClientID:              dsSettings.ClientID,
-		ClientSecret:          dsSettings.ClientSecret,
+		ClientID:              d.clientID,
+		ClientSecret:          d.clientSecret,
 		Endpoints:             map[string][]string{},
 		PlatformScopes:        []string{},
 		SuperToken:            true,
 	}
-
-	// Request token
-	tokenURL := dsSettings.BaseURL + "/v1/token"
-	fmt.Println("alo " + tokenURL)
+	tokenURL := d.baseURL + "/v1/token"
 	body, err := json.Marshal(tokenReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal token request: %w", err)
+		return fmt.Errorf("failed to marshal token request: %w", err)
 	}
-	resp, err := doHTTPPost(tokenURL, body)
+	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get WEMS token: %w", err)
+		return fmt.Errorf("failed to create token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get WEMS token: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("WEMS token request failed: %s %s", resp.Status, string(bodyBytes))
+		return fmt.Errorf("WEMS token request failed: %s %s", resp.Status, string(bodyBytes))
 	}
-
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read token response: %w", err)
+		return fmt.Errorf("failed to read token response: %w", err)
 	}
-	token := string(bodyBytes)
-
-	return &Datasource{
-		clientID:     dsSettings.ClientID,
-		clientSecret: dsSettings.ClientSecret,
-		baseURL:      dsSettings.BaseURL,
-		token:        token,
-		tokenExpiry:  time.Now().Add(20 * time.Minute),
-	}, nil
-}
-
-// doHTTPPost is a helper to POST JSON and return the response
-func doHTTPPost(url string, body []byte) (*http.Response, error) {
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 10 * time.Second}
-	return client.Do(req)
+	d.token = string(bodyBytes)
+	d.tokenExpiry = time.Now().Add(30 * time.Minute) // WEMS tokens are valid for 20 min
+	return nil
 }
 
 // Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
@@ -174,6 +179,9 @@ type TimeSeriesDataPoint struct {
 }
 
 func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	if err := d.getTokenIfNeeded(ctx); err != nil {
+		return backend.ErrDataResponse(backend.StatusInternal, "Token error: "+err.Error())
+	}
 	var response backend.DataResponse
 
 	// Unmarshal the JSON into our query model (only for endpoint/appliance/service/datapoint)
@@ -287,60 +295,11 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 // The main use case for these health checks is the test button on the
 // datasource configuration page which allows users to verify that
 // a datasource is working as expected.
-func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	config, err := models.LoadPluginSettings(*req.PluginContext.DataSourceInstanceSettings)
-	if err != nil {
+func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+	if err := d.getTokenIfNeeded(ctx); err != nil {
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
-			Message: "Unable to load settings: " + err.Error(),
-		}, nil
-	}
-	if config.ClientID == "" || config.Secrets.ClientSecret == "" {
-		return &backend.CheckHealthResult{
-			Status:  backend.HealthStatusError,
-			Message: "Missing client_id or client_secret",
-		}, nil
-	}
-	if config.BaseURL == "" {
-		config.BaseURL = DefaultBaseURL
-	}
-
-	// Remove trailing slash from baseURL if present
-	baseURL := config.BaseURL
-	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
-		baseURL = baseURL[:len(baseURL)-1]
-	}
-
-	// Prepare token request
-	tokenReq := TokenRequest{
-		ApplicationComponents: map[string][]string{},
-		ClientID:              config.ClientID,
-		ClientSecret:          config.Secrets.ClientSecret,
-		Endpoints:             map[string][]string{},
-		PlatformScopes:        []string{},
-		SuperToken:            true,
-	}
-	tokenURL := baseURL + "/v1/token"
-	body, err := json.Marshal(tokenReq)
-	if err != nil {
-		return &backend.CheckHealthResult{
-			Status:  backend.HealthStatusError,
-			Message: "Failed to marshal token request: " + err.Error(),
-		}, nil
-	}
-	resp, err := doHTTPPost(tokenURL, body)
-	if err != nil {
-		return &backend.CheckHealthResult{
-			Status:  backend.HealthStatusError,
-			Message: "Failed to get WEMS token: " + err.Error(),
-		}, nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return &backend.CheckHealthResult{
-			Status:  backend.HealthStatusError,
-			Message: fmt.Sprintf("WEMS token request failed: %s %s", resp.Status, string(bodyBytes)),
+			Message: "Token error: " + err.Error(),
 		}, nil
 	}
 	return &backend.CheckHealthResult{
@@ -351,6 +310,12 @@ func (d *Datasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequ
 
 // CallResource handles resource calls from the frontend (e.g., /resources/endpoint-list, /resources/appliance-list)
 func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	if err := d.getTokenIfNeeded(ctx); err != nil {
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusInternalServerError,
+			Body:   []byte("Token error: " + err.Error()),
+		})
+	}
 	if req.Path == "endpoint-list" {
 		// Build WEMS endpoint list URL
 		url := d.baseURL + "/v1/endpoint/"
