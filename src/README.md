@@ -4,47 +4,52 @@ Remove any remaining comments before publishing as these may be displayed on Gra
 
 # WEMS Grafana Plugin
 
-<!-- To help maximize the impact of your README and improve usability for users, we propose the following loose structure:
+A Grafana data source plugin for visualizing WEMS (WAGO Energy Management System) history data via the WEMS API.
 
-**BEFORE YOU BEGIN**
-- Ensure all links are absolute URLs so that they will work when the README is displayed within Grafana and Grafana.com
-- Be inspired ✨
-  - [grafana-polystat-panel](https://github.com/grafana/grafana-polystat-panel)
-  - [volkovlabs-variable-panel](https://github.com/volkovlabs/volkovlabs-variable-panel)
-
-**ADD SOME BADGES**
-
-Badges convey useful information at a glance for users whether in the Catalog or viewing the source code. You can use the generator on [Shields.io](https://shields.io/badges/dynamic-json-badge) together with the Grafana.com API
-to create dynamic badges that update automatically when you publish a new version to the marketplace.
-
-- For the URL parameter use `https://grafana.com/api/plugins/your-plugin-id`.
-- Example queries:
-  - Downloads: `$.downloads`
-  - Catalog Version: `$.version`
-  - Grafana Dependency: `$.grafanaDependency`
-  - Signature Type: `$.versionSignatureType`
-- Optionally, for the logo parameter use `grafana`.
-
-Full example: ![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?logo=grafana&query=$.version&url=https://grafana.com/api/plugins/grafana-polystat-panel&label=Marketplace&prefix=v&color=F47A20)
-
-Consider other [badges](https://shields.io/badges) as you feel appropriate for your project.
-
-## Overview / Introduction
-Provide one or more paragraphs as an introduction to your plugin to help users understand why they should use it.
-
-Consider including screenshots:
-- in [plugin.json](https://grafana.com/developers/plugin-tools/reference/plugin-json#info) include them as relative links.
-- in the README ensure they are absolute URLs.
+## Features
+- Query WEMS history data directly from Grafana dashboards
+- Secure authentication using WEMS supertoken (client_id, client_secret)
+- Configurable API base URL
+- Interactive query editor with cascading dropdowns:
+  - Endpoint ID
+  - Appliance ID (with model name)
+  - Service URI
+  - Data Point
+  - Aggregate Function (mean, median, min, max, sum, count, first, last, derivative)
+- Support for boolean, numeric, and string data points
 
 ## Requirements
-List any requirements or dependencies they may need to run the plugin.
+- Grafana 9.0 or later
+- Access to the WAGO WEMS API with valid credentials (client_id, client_secret)
 
 ## Getting Started
-Provide a quick start on how to configure and use the plugin.
+1. **Install the plugin** in your Grafana instance (see Grafana plugin catalog or your administrator).
+2. **Configure the data source**:
+   - Enter your WEMS `client_id` and `client_secret`.
+   - Optionally set a custom `base_url` for the WEMS API (defaults to `https://c1.api.wago.com/wems`).
+3. **Create a new panel** and select the WEMS data source.
+4. **Build your query** using the interactive editor:
+   - Select an **Endpoint ID** (site or system).
+   - Select an **Appliance ID** (device, with model name shown in brackets).
+   - Select a **Service URI** (data category or channel).
+   - Select a **Data Point** (measurement or status).
+   - Choose an **Aggregate Function** (defaults to `mean`).
+   - (Optional) Enable **Create Empty Values** to fill missing data points.
 
-## Documentation
-If your project has dedicated documentation available for users, provide links here. For help in following Grafana's style recommendations for technical documentation, refer to our [Writer's Toolkit](https://grafana.com/docs/writers-toolkit/).
+> **Warning:**
+> If the expected value type for your data point is boolean, you **must** set the aggregate function to `last`. Other aggregate functions (mean, sum, etc.) are not meaningful for boolean values and may produce incorrect results.
 
-## Contributing
-Do you want folks to contribute to the plugin or provide feedback through specific means? If so, tell them how!
--->
+## Query Editor Details
+- **Dropdowns are dependent:** Each dropdown is enabled and populated only after the previous selection is made.
+- **Appliance ID dropdown** displays both the appliance name and its model for easier identification.
+- **Aggregate Function** options:
+  - `mean`, `median`, `min`, `max`, `sum`, `count`, `first`, `last`, `derivative`
+  - Default is `mean` (except for boolean values; see warning above)
+
+## Troubleshooting
+- If you see errors loading dropdowns, check your WEMS credentials and network access.
+- If no data appears, verify your query selections and time range.
+- For boolean data points, always use the `last` aggregate function.
+
+## Support
+For questions, issues, or feature requests, please contact your system administrator or the plugin maintainer.
