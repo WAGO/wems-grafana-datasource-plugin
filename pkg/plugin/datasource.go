@@ -256,6 +256,12 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 			values = append(values, float64(v))
 		case int64:
 			values = append(values, float64(v))
+		case bool:
+			if v {
+				values = append(values, 1.0)
+			} else {
+				values = append(values, 0.0)
+			}
 		case string:
 			// Try to parse string as float
 			f, err := strconv.ParseFloat(v, 64)
@@ -436,8 +442,9 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		}
 		// Parse and flatten appliances from processes
 		type appliance struct {
-			ID           string `json:"id"`
-			FriendlyName string `json:"friendlyName"`
+			ID                 string `json:"id"`
+			FriendlyName       string `json:"friendlyName"`
+			ApplianceReference int    `json:"applianceReference"`
 		}
 		type process struct {
 			ID         string      `json:"id"`
@@ -454,22 +461,52 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 				Body:   []byte("Failed to parse appliances: " + err.Error()),
 			})
 		}
-		// Flatten appliances with process info
-		var result []map[string]string
+		// Fetch model info for each appliance in parallel
+		result := make([]map[string]string, 0)
+		type modelInfo struct {
+			FriendlyName string `json:"friendlyName"`
+		}
+		ch := make(chan map[string]string, 32)
+		count := 0
 		for _, proc := range desc.Processes {
 			for _, app := range proc.Appliances {
-				label := app.FriendlyName
-				if label == "" {
-					label = app.ID
-				}
-				if proc.Name != "" {
-					label = fmt.Sprintf("%s (%s)", label, proc.Name)
-				}
-				result = append(result, map[string]string{
-					"id":    app.ID,
-					"label": label,
-				})
+				count++
+				go func(app appliance, procName string) {
+					label := app.FriendlyName
+					if label == "" {
+						label = app.ID
+					}
+					if procName != "" {
+						label = fmt.Sprintf("%s (%s)", label, procName)
+					}
+					modelLabel := ""
+					if app.ApplianceReference != 0 {
+						modelUrl := fmt.Sprintf("%s/v1/component/appliance/%d", d.baseURL, app.ApplianceReference)
+						reqModel, err := http.NewRequestWithContext(ctx, "GET", modelUrl, nil)
+						if err == nil {
+							reqModel.Header.Set("Authorization", "Bearer "+d.token)
+							reqModel.Header.Set("Accept", "application/json")
+							client := &http.Client{Timeout: 10 * time.Second}
+							respModel, err := client.Do(reqModel)
+							if err == nil && respModel.StatusCode == 200 {
+								defer respModel.Body.Close()
+								var model modelInfo
+								if err := json.NewDecoder(respModel.Body).Decode(&model); err == nil && model.FriendlyName != "" {
+									modelLabel = model.FriendlyName
+								}
+							}
+						}
+					}
+					if modelLabel != "" {
+						label = fmt.Sprintf("%s [%s]", label, modelLabel)
+					}
+					ch <- map[string]string{"id": app.ID, "label": label}
+				}(app, proc.Name)
 			}
+		}
+		for i := 0; i < count; i++ {
+			item := <-ch
+			result = append(result, item)
 		}
 		respBytes, _ := json.Marshal(result)
 		return sender.Send(&backend.CallResourceResponse{
