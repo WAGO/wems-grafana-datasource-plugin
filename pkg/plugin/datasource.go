@@ -443,7 +443,7 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 						label = app.ID
 					}
 					if procName != "" {
-						label = fmt.Sprintf("%s (%s)", label, procName)
+						label = fmt.Sprintf("[%s] %s", procName, label)
 					}
 					modelLabel := ""
 					if app.ApplianceReference != 0 {
@@ -464,7 +464,7 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 						}
 					}
 					if modelLabel != "" {
-						label = fmt.Sprintf("%s [%s]", label, modelLabel)
+						label = fmt.Sprintf("%s (%s)", label, modelLabel)
 					}
 					ch <- map[string]string{"id": app.ID, "label": label}
 				}(app, proc.Name)
