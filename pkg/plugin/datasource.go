@@ -681,6 +681,7 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 			DataPoints map[string]struct {
 				Unit        string   `json:"unit"`
 				ValidValues []string `json:"validValues"`
+				Type        string   `json:"type"`
 			} `json:"dataPoints"`
 		}
 		if err := json.Unmarshal(body, &raw); err != nil {
@@ -695,6 +696,10 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 			unit = mapUnit(dp.Unit)
 			if len(dp.ValidValues) > 0 {
 				validValues = dp.ValidValues
+			}
+			// If type is BinarySetPoint or BinaryReading, set validValues to ["False", "True"]
+			 if dp.Type == "BinarySetPoint" || dp.Type == "BinaryReading" {
+			 	validValues = []string{"False", "True"}
 			}
 		}
 		respMap := map[string]interface{}{"unit": unit}
