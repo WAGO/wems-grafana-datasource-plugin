@@ -203,7 +203,7 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 	params["from"] = fmt.Sprintf("%d", query.TimeRange.From.Unix())
 	params["to"] = fmt.Sprintf("%d", query.TimeRange.To.Unix())
 	if query.MaxDataPoints > 0 {
-		params["limit"] = fmt.Sprintf("%d", query.MaxDataPoints)
+		params["limit"] = "10000" //TODO use query.MaxDataPoints
 	}
 	if query.Interval > 0 {
 		params["aggregateInterval"] = fmt.Sprintf("%ds", int(query.Interval.Seconds()))
