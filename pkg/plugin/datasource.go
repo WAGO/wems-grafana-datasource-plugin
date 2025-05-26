@@ -171,6 +171,7 @@ type WEMSQueryModel struct {
 	DataPoint         string `json:"data_point"`
 	AggregateFunction string `json:"aggregate_function,omitempty"`
 	CreateEmptyValues *bool  `json:"create_empty_values,omitempty"`
+	Unit			  string `json:"unit,omitempty"`
 }
 
 type TimeSeriesDataPoint struct {
@@ -284,9 +285,13 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 	}
 
 	label := fmt.Sprintf("%s/%s/%s/%s", qm.EndpointID, qm.ApplianceID, qm.ServiceURI, qm.DataPoint)
+	valueField := data.NewField(qm.DataPoint, nil, values)
+	if qm.Unit != "" {
+		valueField.Config = &data.FieldConfig{Unit: qm.Unit}
+	}
 	frame := data.NewFrame(label,
 		data.NewField("time", nil, times),
-		data.NewField(qm.DataPoint, nil, values),
+		valueField,
 	)
 	response.Frames = append(response.Frames, frame)
 	return response
@@ -605,9 +610,114 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		})
 	}
 
+	if req.Path == "datapoint-unit" {
+		endpointId := ""
+		applianceId := ""
+		serviceUri := ""
+		datapoint := ""
+		if req.URL != "" {
+			if parsedUrl, err := url.Parse(req.URL); err == nil {
+				endpointId = parsedUrl.Query().Get("endpointId")
+				applianceId = parsedUrl.Query().Get("applianceId")
+				serviceUri = parsedUrl.Query().Get("serviceUri")
+				datapoint = parsedUrl.Query().Get("datapoint")
+			}
+		}
+		if endpointId == "" || applianceId == "" || serviceUri == "" || datapoint == "" {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Missing endpointId, applianceId, serviceUri, or datapoint parameter"),
+			})
+		}
+		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s/%s", d.baseURL, endpointId, applianceId, serviceUri)
+		req2, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to create request: " + err.Error()),
+			})
+		}
+		req2.Header.Set("Authorization", "Bearer "+d.token)
+		req2.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 20 * time.Second}
+		resp, err := client.Do(req2)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Request failed: " + err.Error()),
+			})
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to read response: " + err.Error()),
+			})
+		}
+		if resp.StatusCode != 200 {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: resp.StatusCode,
+				Body:   body,
+			})
+		}
+		var raw struct {
+			DataPoints map[string]struct {
+				Unit string `json:"unit"`
+			} `json:"dataPoints"`
+		}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusInternalServerError,
+				Body:   []byte("Failed to parse datapoint unit: " + err.Error()),
+			})
+		}
+		unit := ""
+		if dp, ok := raw.DataPoints[datapoint]; ok {
+			unit = mapUnit(dp.Unit)
+		}
+		respBytes, _ := json.Marshal(map[string]string{"unit": unit})
+		return sender.Send(&backend.CallResourceResponse{
+			Status: http.StatusOK,
+			Body:   respBytes,
+		})
+	}
+
 	// Unknown resource
 	return sender.Send(&backend.CallResourceResponse{
 		Status: http.StatusNotFound,
 		Body:   []byte("Not found"),
 	})
+}
+
+// Unit mapping function
+func mapUnit(unit string) string {
+	switch unit {
+	case "NONE":
+		return ""
+	case "VOLTS":
+		return "V"
+	case "AMPERES":
+		return "A"
+	case "WATTS":
+		return "W"
+	case "JOULES":
+		return "J"
+	case "OHMS":
+		return "OHMS"
+	case "KELVIN":
+		return "K"
+	case "PERCENT":
+		return "%"
+	case "HERTZ":
+		return "Hz"
+	case "VOLT_AMPERES":
+		return "VA"
+	case "VOLT_AMPERES_REACTIVE":
+		return "VAr"
+	case "RPM":
+		return "rpm"
+	default:
+		return unit
+	}
 }

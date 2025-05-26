@@ -3,6 +3,7 @@ import { InlineField, Select } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, MyQuery } from '../types';
+import { getBackendSrv } from '@grafana/runtime';
 
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
@@ -22,6 +23,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [dataPoints, setDataPoints] = useState<Array<SelectableValue<string>>>([]);
   const [loadingDataPoints, setLoadingDataPoints] = useState(false);
   const [dataPointError, setDataPointError] = useState<string | null>(null);
+
+  const [unit, setUnit] = useState<string | undefined>(undefined);
 
   const aggregationOptions: Array<SelectableValue<string>> = [
     { label: 'Mean', value: 'mean' },
@@ -138,6 +141,38 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       });
   }, [datasource, query.endpoint_id, query.appliance_id, query.service_uri]);
 
+  // Fetch unit when a datapoint is selected
+  useEffect(() => {
+    if (!query.endpoint_id || !query.appliance_id || !query.service_uri || !query.data_point) {
+      setUnit(undefined);
+      return;
+    }
+    // Call backend resource to get the unit
+    getBackendSrv()
+      .get(`/api/datasources/${datasource.id}/resources/datapoint-unit`, {
+        endpointId: query.endpoint_id,
+        applianceId: query.appliance_id,
+        serviceUri: query.service_uri,
+        datapoint: query.data_point,
+      })
+      .then((result: any) => {
+        setUnit(result.unit || undefined);
+      })
+      .catch(() => setUnit(undefined));
+  }, [query.endpoint_id, query.appliance_id, query.service_uri, query.data_point, datasource.id]);
+
+  // Pass the unit to the query object so it can be used in the panel
+  useEffect(() => {
+    if (unit !== undefined && query.unit !== unit) {
+      onChange({ ...query, unit });
+    }
+    // If unit is undefined and query.unit is set, clear it
+    if (unit === undefined && query.unit) {
+      onChange({ ...query, unit: undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit]);
+
   const onSelectEndpoint = (option: SelectableValue<string>) => {
     // Clear appliance_id, service_uri, and data_point if endpoint changes
     onChange({ ...query, endpoint_id: option?.value ?? '', appliance_id: '', service_uri: '', data_point: '' });
@@ -212,6 +247,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             disabled={!query.endpoint_id || !query.appliance_id || !query.service_uri}
           />
           {dataPointError && <span style={{ color: 'red', marginLeft: 8 }}>{dataPointError}</span>}
+        </div>
+      </InlineField>
+      <InlineField label="Unit (auto)">
+        <div style={{ minHeight: 24, display: 'flex', alignItems: 'center' }}>
+          <span>{unit || '—'}</span>
         </div>
       </InlineField>
       <InlineField label="Aggregate Function">
