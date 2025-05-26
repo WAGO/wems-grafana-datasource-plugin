@@ -46,6 +46,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           label: ep.friendlyName ? `${ep.friendlyName} (${ep.endpointId})` : ep.endpointId,
           value: ep.endpointId,
         }));
+        opts.sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label));
         setEndpoints(opts);
         setLoadingEndpoints(false);
       })
@@ -71,6 +72,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           label: ap.label || ap.id,
           value: ap.id,
         }));
+        opts.sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label));
         setAppliances(opts);
         setLoadingAppliances(false);
       })
@@ -96,6 +98,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           label: svc.label || svc.uri,
           value: svc.uri,
         }));
+        opts.sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label));
         setServiceUris(opts);
         setLoadingServiceUris(false);
       })
@@ -125,6 +128,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           label: dp,
           value: dp,
         }));
+        opts.sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label));
         setDataPoints(opts);
         setLoadingDataPoints(false);
       })
