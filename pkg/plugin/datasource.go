@@ -283,9 +283,10 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 		}
 	}
 
-	frame := data.NewFrame("response",
+	label := fmt.Sprintf("%s/%s/%s/%s", qm.EndpointID, qm.ApplianceID, qm.ServiceURI, qm.DataPoint)
+	frame := data.NewFrame(label,
 		data.NewField("time", nil, times),
-		data.NewField("value", nil, values),
+		data.NewField(qm.DataPoint, nil, values),
 	)
 	response.Frames = append(response.Frames, frame)
 	return response
