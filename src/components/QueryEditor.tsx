@@ -25,6 +25,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [dataPointError, setDataPointError] = useState<string | null>(null);
 
   const [unit, setUnit] = useState<string | undefined>(undefined);
+  const [validValues, setValidValues] = useState<string[] | undefined>(undefined);
 
   const aggregationOptions: Array<SelectableValue<string>> = [
     { label: 'Mean', value: 'mean' },
@@ -141,13 +142,14 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       });
   }, [datasource, query.endpoint_id, query.appliance_id, query.service_uri]);
 
-  // Fetch unit when a datapoint is selected
+  // Fetch unit and validValues when a datapoint is selected
   useEffect(() => {
     if (!query.endpoint_id || !query.appliance_id || !query.service_uri || !query.data_point) {
       setUnit(undefined);
+      setValidValues(undefined);
       return;
     }
-    // Call backend resource to get the unit
+    // Call backend resource to get the unit and validValues
     getBackendSrv()
       .get(`/api/datasources/${datasource.id}/resources/datapoint-unit`, {
         endpointId: query.endpoint_id,
@@ -157,21 +159,39 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       })
       .then((result: any) => {
         setUnit(result.unit || undefined);
+        setValidValues(result.validValues || undefined);
       })
-      .catch(() => setUnit(undefined));
+      .catch(() => {
+        setUnit(undefined);
+        setValidValues(undefined);
+      });
   }, [query.endpoint_id, query.appliance_id, query.service_uri, query.data_point, datasource.id]);
 
-  // Pass the unit to the query object so it can be used in the panel
+  // Pass the unit and validValues to the query object so it can be used in the panel
   useEffect(() => {
+    let changed = false;
+    const newQuery: any = { ...query };
     if (unit !== undefined && query.unit !== unit) {
-      onChange({ ...query, unit });
+      newQuery.unit = unit;
+      changed = true;
     }
-    // If unit is undefined and query.unit is set, clear it
     if (unit === undefined && query.unit) {
-      onChange({ ...query, unit: undefined });
+      newQuery.unit = undefined;
+      changed = true;
+    }
+    if (validValues !== undefined && JSON.stringify(query.validValues) !== JSON.stringify(validValues)) {
+      newQuery.validValues = validValues;
+      changed = true;
+    }
+    if (validValues === undefined && query.validValues) {
+      newQuery.validValues = undefined;
+      changed = true;
+    }
+    if (changed) {
+      onChange(newQuery);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unit]);
+  }, [unit, validValues]);
 
   const onSelectEndpoint = (option: SelectableValue<string>) => {
     // Clear appliance_id, service_uri, and data_point if endpoint changes

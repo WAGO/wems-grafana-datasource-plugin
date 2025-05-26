@@ -165,13 +165,14 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 }
 
 type WEMSQueryModel struct {
-	EndpointID        string `json:"endpoint_id"`
-	ApplianceID       string `json:"appliance_id"`
-	ServiceURI        string `json:"service_uri"`
-	DataPoint         string `json:"data_point"`
-	AggregateFunction string `json:"aggregate_function,omitempty"`
-	CreateEmptyValues *bool  `json:"create_empty_values,omitempty"`
-	Unit			  string `json:"unit,omitempty"`
+	EndpointID        string   `json:"endpoint_id"`
+	ApplianceID       string   `json:"appliance_id"`
+	ServiceURI        string   `json:"service_uri"`
+	DataPoint         string   `json:"data_point"`
+	AggregateFunction string   `json:"aggregate_function,omitempty"`
+	CreateEmptyValues *bool    `json:"create_empty_values,omitempty"`
+	Unit              string   `json:"unit,omitempty"`
+	ValidValues       []string `json:"validValues,omitempty"`
 }
 
 type TimeSeriesDataPoint struct {
@@ -288,6 +289,21 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 	valueField := data.NewField(label, nil, values)
 	if qm.Unit != "" {
 		valueField.Config = &data.FieldConfig{Unit: qm.Unit}
+	}
+	if len(qm.ValidValues) > 0 {
+		// Build a ValueMapper (map[string]ValueMappingResult) for enum value mappings
+		mapper := data.ValueMapper{}
+		for i, val := range qm.ValidValues {
+			mapper[fmt.Sprintf("%d", i)] = data.ValueMappingResult{
+				Text:  val,
+				Index: i,
+			}
+		}
+		valueMappings := data.ValueMappings{mapper}
+		if valueField.Config == nil {
+			valueField.Config = &data.FieldConfig{}
+		}
+		valueField.Config.Mappings = valueMappings
 	}
 	frame := data.NewFrame(label,
 		data.NewField("time", nil, times),
@@ -663,7 +679,8 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		}
 		var raw struct {
 			DataPoints map[string]struct {
-				Unit string `json:"unit"`
+				Unit        string   `json:"unit"`
+				ValidValues []string `json:"validValues"`
 			} `json:"dataPoints"`
 		}
 		if err := json.Unmarshal(body, &raw); err != nil {
@@ -673,10 +690,18 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 			})
 		}
 		unit := ""
+		var validValues []string
 		if dp, ok := raw.DataPoints[datapoint]; ok {
 			unit = mapUnit(dp.Unit)
+			if len(dp.ValidValues) > 0 {
+				validValues = dp.ValidValues
+			}
 		}
-		respBytes, _ := json.Marshal(map[string]string{"unit": unit})
+		respMap := map[string]interface{}{"unit": unit}
+		if len(validValues) > 0 {
+			respMap["validValues"] = validValues
+		}
+		respBytes, _ := json.Marshal(respMap)
 		return sender.Send(&backend.CallResourceResponse{
 			Status: http.StatusOK,
 			Body:   respBytes,

@@ -9,6 +9,7 @@ export interface MyQuery extends DataQuery {
   aggregate_function?: string;
   create_empty_values?: boolean;
   unit?: string;
+  validValues?: string[];
 }
 
 export const DEFAULT_QUERY: Partial<MyQuery> = {};
