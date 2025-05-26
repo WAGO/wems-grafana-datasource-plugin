@@ -221,7 +221,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             value={endpoints.find((e) => e.value === query.endpoint_id) || null}
             onChange={onSelectEndpoint}
             isLoading={loadingEndpoints}
-            width={40}
+            width={80}
             placeholder="Select endpoint..."
           />
           {endpointError && <span style={{ color: 'red', marginLeft: 8 }}>{endpointError}</span>}
@@ -234,7 +234,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             value={appliances.find((a) => a.value === query.appliance_id) || null}
             onChange={onSelectAppliance}
             isLoading={loadingAppliances}
-            width={40}
+            width={80}
             placeholder={query.endpoint_id ? 'Select appliance...' : 'Select endpoint first'}
             disabled={!query.endpoint_id}
           />
@@ -248,7 +248,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             value={serviceUris.find((s) => s.value === query.service_uri) || null}
             onChange={onSelectServiceUri}
             isLoading={loadingServiceUris}
-            width={40}
+            width={80}
             placeholder={query.endpoint_id && query.appliance_id ? 'Select service URI...' : 'Select endpoint and appliance first'}
             disabled={!query.endpoint_id || !query.appliance_id}
           />
