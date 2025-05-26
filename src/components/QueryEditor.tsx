@@ -249,11 +249,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           {dataPointError && <span style={{ color: 'red', marginLeft: 8 }}>{dataPointError}</span>}
         </div>
       </InlineField>
-      <InlineField label="Unit (auto)">
-        <div style={{ minHeight: 24, display: 'flex', alignItems: 'center' }}>
-          <span>{unit || '—'}</span>
-        </div>
-      </InlineField>
       <InlineField label="Aggregate Function">
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <Select

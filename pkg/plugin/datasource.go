@@ -285,7 +285,7 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 	}
 
 	label := fmt.Sprintf("%s/%s/%s/%s", qm.EndpointID, qm.ApplianceID, qm.ServiceURI, qm.DataPoint)
-	valueField := data.NewField(qm.DataPoint, nil, values)
+	valueField := data.NewField(label, nil, values)
 	if qm.Unit != "" {
 		valueField.Config = &data.FieldConfig{Unit: qm.Unit}
 	}
