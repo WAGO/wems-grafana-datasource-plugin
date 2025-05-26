@@ -134,3 +134,12 @@ Below you can find source code for existing app plugins and other related docume
 - [Basic data source plugin example](https://github.com/grafana/grafana-plugin-examples/tree/master/examples/datasource-basic#readme)
 - [`plugin.json` documentation](https://grafana.com/developers/plugin-tools/reference/plugin-json)
 - [How to sign a plugin?](https://grafana.com/developers/plugin-tools/publish-a-plugin/sign-a-plugin)
+
+
+## Deploy manually (WAGO)
+
+1. Run `npm run build` to build the frontend in production mode.
+2. Run `mage -v build:linux` to build the backend.
+3. Create a repository on your server under **/var/lib/grafana/plugins**.
+4. Copy the content of your **dist** local repository to the created folder.
+5. Add the line **allow_loading_unsigned_plugins = wago-wemsgrafanaplugin-datasource** to **/etc/grafana/grafana.ini**.
