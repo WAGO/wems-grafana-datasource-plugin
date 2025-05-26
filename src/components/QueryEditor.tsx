@@ -187,6 +187,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       newQuery.validValues = undefined;
       changed = true;
     }
+    // If validValues is present and aggregate_function is not 'last', set it to 'last'
+    if (validValues && validValues.length > 0 && query.aggregate_function !== 'last') {
+      newQuery.aggregate_function = 'last';
+      changed = true;
+    }
     if (changed) {
       onChange(newQuery);
     }
@@ -277,6 +282,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             onChange={opt => onChange({ ...query, aggregate_function: opt?.value || 'mean' })}
             width={20}
             placeholder="Select aggregation..."
+            disabled={!!(validValues && validValues.length > 0)}
           />
         </div>
       </InlineField>
