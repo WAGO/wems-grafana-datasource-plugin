@@ -1,55 +1,84 @@
-<!-- This README file is going to be the one displayed on the Grafana.com website for your plugin. Uncomment and replace the content here before publishing.
+# WEMS Grafana Data Source Plugin
 
-Remove any remaining comments before publishing as these may be displayed on Grafana.com -->
+A comprehensive Grafana data source plugin that seamlessly integrates **WAGO Energy Management System (WEMS)** with Grafana dashboards, enabling real-time visualization and analysis of energy data.
 
-# WEMS Grafana Plugin
+## 🚀 Overview
 
-A Grafana data source plugin for visualizing WEMS (WAGO Energy Management System) history data via the WEMS API.
+The WEMS Grafana Plugin bridges the gap between WAGO's industrial IoT energy management platform and Grafana's powerful visualization capabilities. Monitor energy consumption, production efficiency, and system performance metrics across your industrial infrastructure with ease.
 
-## Features
-- Query WEMS history data directly from Grafana dashboards
-- Secure authentication using WEMS supertoken (client_id, client_secret)
-- Configurable API base URL
-- Interactive query editor with cascading dropdowns:
-  - Endpoint ID
-  - Appliance ID (with model name)
-  - Service URI
-  - Data Point
-  - Aggregate Function (mean, median, min, max, sum, count, first, last, derivative)
-- Support for boolean, numeric, and string data points
+## ✨ Key Features
 
-## Requirements
-- Grafana 9.0 or later
-- Access to the WAGO WEMS API with valid credentials (client_id, client_secret)
+### 🔌 **Seamless Integration**
+- Direct connection to WEMS API for real-time and historical data
+- Secure OAuth2-style authentication with client credentials
 
-## Getting Started
-1. **Install the plugin** in your Grafana instance (see Grafana plugin catalog or your administrator).
-2. **Configure the data source**:
-   - Enter your WEMS `client_id` and `client_secret`.
-   - Optionally set a custom `base_url` for the WEMS API (defaults to `https://c1.api.wago.com/wems`).
-3. **Create a new panel** and select the WEMS data source.
-4. **Build your query** using the interactive editor:
-   - Select an **Endpoint ID** (site or system).
-   - Select an **Appliance ID** (device, with model name shown in brackets).
-   - Select a **Service URI** (data category or channel).
-   - Select a **Data Point** (measurement or status).
-   - Choose an **Aggregate Function** (defaults to `mean`).
-   - (Optional) Enable **Create Empty Values** to fill missing data points.
+### 📊 **Rich Data Visualization**
+- Support for multiple data types: numeric, boolean, and string values
+- Comprehensive aggregation functions for time-series analysis
+- Interactive query builder with intuitive cascading selections
 
-> **Warning:**
-> If the expected value type for your data point is boolean, you **must** set the aggregate function to `last`. Other aggregate functions (mean, sum, etc.) are not meaningful for boolean values and may produce incorrect results.
+### 🎯 **User-Friendly Interface**
+- **Hierarchical Data Selection**: Endpoint → Appliance → Service → Data Point
+- **Smart Filtering**: Contextual options based on your selections
+- **Model Information**: Device model names displayed for easy identification
 
-## Query Editor Details
-- **Dropdowns are dependent:** Each dropdown is enabled and populated only after the previous selection is made.
-- **Appliance ID dropdown** displays both the appliance name and its model for easier identification.
-- **Aggregate Function** options:
-  - `mean`, `median`, `min`, `max`, `sum`, `count`, `first`, `last`, `derivative`
-  - Default is `mean` (except for boolean values; see warning above)
+### 📈 **Advanced Analytics**
+- **9 Aggregation Functions**: `mean`, `median`, `min`, `max`, `sum`, `count`, `first`, `last`, `derivative`
+- **Gap Filling**: Optional empty value creation for continuous time series
+- **Flexible Time Ranges**: Compatible with Grafana's time picker
 
-## Troubleshooting
-- If you see errors loading dropdowns, check your WEMS credentials and network access.
-- If no data appears, verify your query selections and time range.
-- For boolean data points, always use the `last` aggregate function.
+## 📋 Requirements
 
-## Support
-For questions, issues, or feature requests, please contact your system administrator or the plugin maintainer.
+| Component | Version | Notes |
+|-----------|---------|-------|
+| **Grafana** | ≥ 10.4.0 | Required for plugin compatibility |
+| **WEMS API Access** | Latest | Valid client credentials required |
+| **Network Access** | HTTPS | To WEMS API endpoints |
+
+## ⚙️ Configuration
+
+### 1. Add Data Source
+1. Go to **Configuration** → **Data Sources**
+2. Click **Add data source**
+3. Select **WEMS** from the list
+
+### 2. Configure Authentication
+| Field | Description | Required |
+|-------|-------------|----------|
+| **Client ID** | Your WEMS application client identifier | ✅ |
+| **Client Secret** | Your WEMS application secret key | ✅ |
+| **Base URL** | WEMS API endpoint (default: `https://c1.api.wago.com/wems`) | ❌ |
+
+### 3. Test Connection
+Click **Save & Test** to verify your configuration. A successful connection will display available endpoints.
+
+## 📝 Creating Queries
+
+### Step-by-Step Query Builder
+
+1. **Select Endpoint**: Choose your site or system endpoint
+2. **Choose Appliance**: Pick the energy management device
+3. **Select Service**: Choose the data category or measurement channel
+4. **Pick Data Point**: Select the specific metric to visualize
+5. **Configure Aggregation**: Choose how to aggregate data over time intervals
+
+### Query Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| **Endpoint ID** | Site or system identifier | `site_001` |
+| **Appliance ID** | Device identifier with model info | `inverter_01 (Fronius Gen24)` |
+| **Service URI** | Data category or channel | `sgr.ActivePowerAC` |
+| **Data Point** | Specific measurement | `ActivePowerACTot` |
+| **Aggregate Function** | Time-series aggregation method | `mean` |
+| **Create Empty Values** | Fill gaps in time series | `false` |
+
+## ⚠️ Important Notes
+
+### Boolean Data Points
+> **Critical**: For boolean data points, always use the `last` aggregate function. Statistical functions like `mean` or `sum` are not meaningful for boolean values and will produce incorrect results.
+
+### Data Type Handling
+- **Numeric Values**: All aggregation functions supported
+- **Boolean Values**: Use `last`, `first`, or `count` only
+- **String Values**: Use `first`, `last`, or `count` only
