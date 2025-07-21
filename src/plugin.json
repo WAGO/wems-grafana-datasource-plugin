@@ -7,7 +7,7 @@
   "backend": true,
   "executable": "gpx_wems_grafana_plugin",
   "info": {
-    "description": "",
+    "description": "WEMS is a Grafana datasource plugin for integrating and visualizing data from WAGO Energy Management System (WEMS). It enables users to query, monitor, and analyze energy data directly within Grafana dashboards.",
     "author": {
       "name": "Wago"
     },
@@ -17,7 +17,12 @@
       "large": "img/logo.svg"
     },
     "links": [],
-    "screenshots": [],
+    "screenshots": [
+      {
+        "path": "img/screenshot_explorer.png",
+        "name": "Explorer View"
+      }
+    ],
     "version": "%VERSION%",
     "updated": "%TODAY%"
   },
