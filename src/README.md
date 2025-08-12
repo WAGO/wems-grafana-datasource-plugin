@@ -2,32 +2,26 @@
 
 A comprehensive Grafana data source plugin that seamlessly integrates **WAGO Energy Management System (WEMS)** with Grafana dashboards, enabling real-time visualization and analysis of energy data.
 
-## 🚀 Overview
+## Overview
 
 The WEMS Grafana Plugin bridges the gap between WAGO's industrial IoT energy management platform and Grafana's powerful visualization capabilities. Monitor energy consumption, production efficiency, and system performance metrics across your industrial infrastructure with ease.
 
-## ✨ Key Features
+## Key Features
 
-### 🔌 **Seamless Integration**
-- Direct connection to WEMS API for real-time and historical data
-- Secure OAuth2-style authentication with client credentials
-
-### 📊 **Rich Data Visualization**
+### **Data Visualization**
 - Support for multiple data types: numeric, boolean, and string values
-- Comprehensive aggregation functions for time-series analysis
 - Interactive query builder with intuitive cascading selections
 
-### 🎯 **User-Friendly Interface**
+### **User-Friendly Interface**
 - **Hierarchical Data Selection**: Endpoint → Appliance → Service → Data Point
-- **Smart Filtering**: Contextual options based on your selections
+- **Filtering**: Contextual options based on your selections
 - **Model Information**: Device model names displayed for easy identification
 
-### 📈 **Advanced Analytics**
+### **Advanced Analytics**
 - **9 Aggregation Functions**: `mean`, `median`, `min`, `max`, `sum`, `count`, `first`, `last`, `derivative`
 - **Gap Filling**: Optional empty value creation for continuous time series
-- **Flexible Time Ranges**: Compatible with Grafana's time picker
 
-## 📋 Requirements
+## Requirements
 
 | Component | Version | Notes |
 |-----------|---------|-------|
@@ -35,7 +29,7 @@ The WEMS Grafana Plugin bridges the gap between WAGO's industrial IoT energy man
 | **WEMS API Access** | Latest | Valid client credentials required |
 | **Network Access** | HTTPS | To WEMS API endpoints |
 
-## ⚙️ Configuration
+## Configuration
 
 ### 1. Add Data Source
 1. Go to **Configuration** → **Data Sources**
@@ -52,7 +46,7 @@ The WEMS Grafana Plugin bridges the gap between WAGO's industrial IoT energy man
 ### 3. Test Connection
 Click **Save & Test** to verify your configuration. A successful connection will display available endpoints.
 
-## 📝 Creating Queries
+## Creating Queries
 
 ### Step-by-Step Query Builder
 
@@ -73,7 +67,7 @@ Click **Save & Test** to verify your configuration. A successful connection will
 | **Aggregate Function** | Time-series aggregation method | `mean` |
 | **Create Empty Values** | Fill gaps in time series | `false` |
 
-## ⚠️ Important Notes
+## Important Notes
 
 ### Boolean Data Points
 > **Critical**: For boolean data points, always use the `last` aggregate function. Statistical functions like `mean` or `sum` are not meaningful for boolean values and will produce incorrect results.
