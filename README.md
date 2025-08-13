@@ -1,19 +1,14 @@
 # WEMS Grafana Datasource Plugin
 
-A Grafana datasource plugin for integrating and visualizing data from the **WAGO Energy Management System (WEMS)**. This plugin enables users to query, monitor, and analyze energy data directly within Grafana dashboards with a user-friendly interface and powerful querying capabilities.
+A Grafana datasource plugin for integrating and visualizing data from the **WAGO Energy Management System (WEMS)**. This plugin enables users to query, monitor, and analyze energy data directly within Grafana dashboards with a user-friendly interface.
 
 ![WEMS Plugin Screenshot](src/img/screenshot_explorer.png)
 
 ## Features
 
-- **Seamless Integration**: Direct connection to WEMS API with OAuth2-style authentication
-- **Time Series Data**: Query historical energy data with configurable time ranges
 - **Hierarchical Data Structure**: Navigate through Endpoints → Appliances → Services → Data Points
 - **Multiple Aggregation Functions**: Mean, median, min, max, sum, count, first, last, derivative
-- **Smart Unit Mapping**: Automatic conversion of WEMS units to Grafana-friendly formats
-- **Value Mapping**: Support for enum and binary value types with proper labeling
-- **Performance Optimized**: Concurrent API calls and intelligent token caching
-- **Developer Friendly**: Comprehensive error handling and validation
+- **Unit Mapping**: Automatic conversion of WEMS units to Grafana-friendly formats
 
 ## Requirements
 
