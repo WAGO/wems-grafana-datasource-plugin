@@ -1,6 +1,6 @@
 {
   "name": "wems-grafana-plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "scripts": {
     "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
     "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
@@ -73,6 +73,9 @@
     "@grafana/schema": "^11.5.3",
     "react": "18.2.0",
     "react-dom": "18.2.0"
+  },
+  "overrides": {
+    "form-data": "4.0.4"
   },
   "packageManager": "npm@10.1.0"
 }
