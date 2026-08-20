@@ -1,33 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { InlineField, Select } from '@grafana/ui';
-import { QueryEditorProps, SelectableValue } from '@grafana/data';
+import { Combobox, ComboboxOption, InlineField } from '@grafana/ui';
+import { QueryEditorProps } from '@grafana/data';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, MyQuery } from '../types';
-import { getBackendSrv } from '@grafana/runtime';
 
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
-  const [endpoints, setEndpoints] = useState<Array<SelectableValue<string>>>([]);
+  const [endpoints, setEndpoints] = useState<Array<ComboboxOption<string>>>([]);
   const [loadingEndpoints, setLoadingEndpoints] = useState(false);
   const [endpointError, setEndpointError] = useState<string | null>(null);
 
-  const [appliances, setAppliances] = useState<Array<SelectableValue<string>>>([]);
+  const [appliances, setAppliances] = useState<Array<ComboboxOption<string>>>([]);
   const [loadingAppliances, setLoadingAppliances] = useState(false);
   const [applianceError, setApplianceError] = useState<string | null>(null);
 
-  const [serviceUris, setServiceUris] = useState<Array<SelectableValue<string>>>([]);
+  const [serviceUris, setServiceUris] = useState<Array<ComboboxOption<string>>>([]);
   const [loadingServiceUris, setLoadingServiceUris] = useState(false);
   const [serviceUriError, setServiceUriError] = useState<string | null>(null);
 
-  const [dataPoints, setDataPoints] = useState<Array<SelectableValue<string>>>([]);
+  const [dataPoints, setDataPoints] = useState<Array<ComboboxOption<string>>>([]);
   const [loadingDataPoints, setLoadingDataPoints] = useState(false);
   const [dataPointError, setDataPointError] = useState<string | null>(null);
 
   const [unit, setUnit] = useState<string | undefined>(undefined);
   const [validValues, setValidValues] = useState<string[] | undefined>(undefined);
 
-  const aggregationOptions: Array<SelectableValue<string>> = [
+  const aggregationOptions: Array<ComboboxOption<string>> = [
     { label: 'Mean', value: 'mean' },
     { label: 'Median', value: 'median' },
     { label: 'Min', value: 'min' },
@@ -150,8 +149,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       return;
     }
     // Call backend resource to get the unit and validValues
-    getBackendSrv()
-      .get(`/api/datasources/${datasource.id}/resources/datapoint-unit`, {
+    datasource
+      .getResource('datapoint-unit', {
         endpointId: query.endpoint_id,
         applianceId: query.appliance_id,
         serviceUri: query.service_uri,
@@ -165,7 +164,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         setUnit(undefined);
         setValidValues(undefined);
       });
-  }, [query.endpoint_id, query.appliance_id, query.service_uri, query.data_point, datasource.id]);
+  }, [query.endpoint_id, query.appliance_id, query.service_uri, query.data_point, datasource]);
 
   // Pass the unit and validValues to the query object so it can be used in the panel
   useEffect(() => {
@@ -198,19 +197,19 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unit, validValues]);
 
-  const onSelectEndpoint = (option: SelectableValue<string>) => {
+  const onSelectEndpoint = (option: ComboboxOption<string>) => {
     // Clear appliance_id, service_uri, and data_point if endpoint changes
     onChange({ ...query, endpoint_id: option?.value ?? '', appliance_id: '', service_uri: '', data_point: '' });
   };
-  const onSelectAppliance = (option: SelectableValue<string>) => {
+  const onSelectAppliance = (option: ComboboxOption<string>) => {
     // Clear service_uri and data_point if appliance changes
     onChange({ ...query, appliance_id: option?.value ?? '', service_uri: '', data_point: '' });
   };
-  const onSelectServiceUri = (option: SelectableValue<string>) => {
+  const onSelectServiceUri = (option: ComboboxOption<string>) => {
     // Clear data_point if service_uri changes
     onChange({ ...query, service_uri: option?.value ?? '', data_point: '' });
   };
-  const onSelectDataPoint = (option: SelectableValue<string>) => {
+  const onSelectDataPoint = (option: ComboboxOption<string>) => {
     onChange({ ...query, data_point: option?.value ?? '' });
   };
   const onBoolFieldChange = (field: keyof MyQuery) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,11 +220,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     <>
       <InlineField label="Endpoint ID">
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Select
+          <Combobox
             options={endpoints}
-            value={endpoints.find((e) => e.value === query.endpoint_id) || null}
+            value={query.endpoint_id || null}
             onChange={onSelectEndpoint}
-            isLoading={loadingEndpoints}
+            loading={loadingEndpoints}
             width={80}
             placeholder="Select endpoint..."
           />
@@ -234,11 +233,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       </InlineField>
       <InlineField label="Appliance ID">
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Select
+          <Combobox
             options={appliances}
-            value={appliances.find((a) => a.value === query.appliance_id) || null}
+            value={query.appliance_id || null}
             onChange={onSelectAppliance}
-            isLoading={loadingAppliances}
+            loading={loadingAppliances}
             width={80}
             placeholder={query.endpoint_id ? 'Select appliance...' : 'Select endpoint first'}
             disabled={!query.endpoint_id}
@@ -248,11 +247,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       </InlineField>
       <InlineField label="Service URI">
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Select
+          <Combobox
             options={serviceUris}
-            value={serviceUris.find((s) => s.value === query.service_uri) || null}
+            value={query.service_uri || null}
             onChange={onSelectServiceUri}
-            isLoading={loadingServiceUris}
+            loading={loadingServiceUris}
             width={80}
             placeholder={query.endpoint_id && query.appliance_id ? 'Select service URI...' : 'Select endpoint and appliance first'}
             disabled={!query.endpoint_id || !query.appliance_id}
@@ -262,11 +261,11 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       </InlineField>
       <InlineField label="Data Point">
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Select
+          <Combobox
             options={dataPoints}
-            value={dataPoints.find((d) => d.value === query.data_point) || null}
+            value={query.data_point || null}
             onChange={onSelectDataPoint}
-            isLoading={loadingDataPoints}
+            loading={loadingDataPoints}
             width={40}
             placeholder={query.endpoint_id && query.appliance_id && query.service_uri ? 'Select data point...' : 'Select endpoint, appliance, and service URI first'}
             disabled={!query.endpoint_id || !query.appliance_id || !query.service_uri}
@@ -276,9 +275,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       </InlineField>
       <InlineField label="Aggregate Function">
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Select
+          <Combobox
             options={aggregationOptions}
-            value={aggregationOptions.find(opt => opt.value === (query.aggregate_function || 'mean'))}
+            value={query.aggregate_function || 'mean'}
             onChange={opt => onChange({ ...query, aggregate_function: opt?.value || 'mean' })}
             width={20}
             placeholder="Select aggregation..."
