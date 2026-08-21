@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -330,6 +331,224 @@ func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRe
 	}, nil
 }
 
+// appliance is an appliance declared inside a process of an endpoint description.
+//
+// Careful with the naming: ApplianceReference (singular, an int) is the id of the
+// appliance *model* served by /v1/component/appliance/{n}. It has nothing to do with
+// process.ApplianceReferences (plural), which are references to a base appliance
+// declared in the same description.
+type appliance struct {
+	ID                 string `json:"id"`
+	FriendlyName       string `json:"friendlyName"`
+	ApplianceReference int    `json:"applianceReference"`
+}
+
+// applianceRef references a base appliance declared in the same description. Its ID
+// can be used as an appliance id against the values/series APIs exactly like a plain
+// appliance id.
+type applianceRef struct {
+	ID           string `json:"id"`
+	FriendlyName string `json:"friendlyName"`
+	Reference    string `json:"reference"` // == appliance.ID of the base appliance
+}
+
+type process struct {
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Appliances          []appliance    `json:"appliances"`
+	ApplianceReferences []applianceRef `json:"applianceReferences"`
+}
+
+type descResp struct {
+	Processes []process `json:"processes"`
+}
+
+type modelInfo struct {
+	FriendlyName string `json:"friendlyName"`
+}
+
+// resolveModelLabels fetches the model friendly name for every distinct appliance
+// model referenced by the processes. Lookups run in parallel and are deduplicated, so
+// appliances sharing a model cost a single request. Models that cannot be resolved are
+// simply absent from the result.
+func (d *Datasource) resolveModelLabels(ctx context.Context, procs []process) map[int]string {
+	refs := make([]int, 0)
+	seen := make(map[int]bool)
+	for _, proc := range procs {
+		for _, app := range proc.Appliances {
+			if app.ApplianceReference != 0 && !seen[app.ApplianceReference] {
+				seen[app.ApplianceReference] = true
+				refs = append(refs, app.ApplianceReference)
+			}
+		}
+	}
+
+	labels := make([]string, len(refs))
+	var wg sync.WaitGroup
+	for i, ref := range refs {
+		wg.Add(1)
+		go func(i, ref int) {
+			defer wg.Done()
+			labels[i] = d.fetchModelLabel(ctx, ref)
+		}(i, ref)
+	}
+	wg.Wait()
+
+	out := make(map[int]string, len(refs))
+	for i, ref := range refs {
+		if labels[i] != "" {
+			out[ref] = labels[i]
+		}
+	}
+	return out
+}
+
+// fetchModelLabel returns the friendly name of an appliance model, or "" when it
+// cannot be resolved for any reason.
+func (d *Datasource) fetchModelLabel(ctx context.Context, ref int) string {
+	modelURL := fmt.Sprintf("%s/v1/component/appliance/%d", d.baseURL, ref)
+	req, err := http.NewRequestWithContext(ctx, "GET", modelURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+d.token)
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	var model modelInfo
+	if err := json.NewDecoder(resp.Body).Decode(&model); err != nil {
+		return ""
+	}
+	return model.FriendlyName
+}
+
+// applianceLabel builds the display label of a base appliance:
+// "[Process] FriendlyName (Model)", with each part omitted when unavailable.
+func applianceLabel(app appliance, procName string, modelLabels map[int]string) string {
+	label := app.FriendlyName
+	if label == "" {
+		label = app.ID
+	}
+	if procName != "" {
+		label = fmt.Sprintf("[%s] %s", procName, label)
+	}
+	if modelLabel := modelLabels[app.ApplianceReference]; modelLabel != "" {
+		label = fmt.Sprintf("%s (%s)", label, modelLabel)
+	}
+	return label
+}
+
+// buildApplianceOptions flattens processes into ordered {id,label} options: base
+// appliances sorted by label, each immediately followed by the appliance references
+// pointing at it (sorted among themselves). References whose Reference matches no
+// appliance in the description are appended last, so they stay selectable rather than
+// being silently dropped.
+//
+// The order is meaningful and the frontend renders it as-is.
+func buildApplianceOptions(procs []process, modelLabels map[int]string) []map[string]string {
+	type entry struct {
+		id    string
+		label string
+	}
+
+	bases := make([]entry, 0)
+	baseLabels := make(map[string]string)
+	for _, proc := range procs {
+		for _, app := range proc.Appliances {
+			label := applianceLabel(app, proc.Name, modelLabels)
+			baseLabels[app.ID] = label
+			bases = append(bases, entry{id: app.ID, label: label})
+		}
+	}
+
+	refsByBase := make(map[string][]entry)
+	orphans := make([]entry, 0)
+	for _, proc := range procs {
+		for _, ref := range proc.ApplianceReferences {
+			name := ref.FriendlyName
+			if name == "" {
+				name = ref.ID
+			}
+			if baseLabel, ok := baseLabels[ref.Reference]; ok {
+				refsByBase[ref.Reference] = append(refsByBase[ref.Reference], entry{
+					id:    ref.ID,
+					label: fmt.Sprintf("%s – %s", baseLabel, name),
+				})
+				continue
+			}
+			if proc.Name != "" {
+				name = fmt.Sprintf("[%s] %s", proc.Name, name)
+			}
+			orphans = append(orphans, entry{id: ref.ID, label: name})
+		}
+	}
+
+	byLabel := func(s []entry) {
+		sort.SliceStable(s, func(i, j int) bool { return s[i].label < s[j].label })
+	}
+	byLabel(bases)
+	byLabel(orphans)
+	for _, refs := range refsByBase {
+		byLabel(refs)
+	}
+
+	result := make([]map[string]string, 0, len(bases)+len(orphans))
+	appendEntry := func(e entry) {
+		result = append(result, map[string]string{"id": e.id, "label": e.label})
+	}
+	for _, base := range bases {
+		appendEntry(base)
+		for _, ref := range refsByBase[base.id] {
+			appendEntry(ref)
+		}
+	}
+	for _, o := range orphans {
+		appendEntry(o)
+	}
+	return result
+}
+
+// logDescription reports what the endpoint description actually contained, so a
+// missing appliance reference can be traced to the payload rather than guessed at.
+// The full raw body is logged at debug level only (enable with GF_LOG_LEVEL=debug).
+func logDescription(endpointID string, body []byte, desc descResp) {
+	appliances, refs, orphans := 0, 0, 0
+	known := make(map[string]bool)
+	for _, proc := range desc.Processes {
+		for _, app := range proc.Appliances {
+			known[app.ID] = true
+		}
+	}
+	for _, proc := range desc.Processes {
+		appliances += len(proc.Appliances)
+		refs += len(proc.ApplianceReferences)
+		for _, ref := range proc.ApplianceReferences {
+			if !known[ref.Reference] {
+				orphans++
+				backend.Logger.Warn("appliance reference points at an unknown appliance",
+					"endpointId", endpointID, "process", proc.Name,
+					"refId", ref.ID, "refName", ref.FriendlyName, "reference", ref.Reference)
+			}
+		}
+	}
+	backend.Logger.Info("appliance-list parsed description",
+		"endpointId", endpointID, "bytes", len(body), "processes", len(desc.Processes),
+		"appliances", appliances, "applianceReferences", refs, "orphanReferences", orphans)
+
+	if refs == 0 {
+		backend.Logger.Warn("description contained no applianceReferences; "+
+			"only base appliances will be listed", "endpointId", endpointID)
+	}
+	backend.Logger.Debug("appliance-list raw description", "endpointId", endpointID, "body", string(body))
+}
+
 // CallResource handles resource calls from the frontend (e.g., /resources/endpoint-list, /resources/appliance-list)
 func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
 	if err := d.getTokenIfNeeded(ctx); err != nil {
@@ -427,20 +646,6 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 				Body:   body,
 			})
 		}
-		// Parse and flatten appliances from processes
-		type appliance struct {
-			ID                 string `json:"id"`
-			FriendlyName       string `json:"friendlyName"`
-			ApplianceReference int    `json:"applianceReference"`
-		}
-		type process struct {
-			ID         string      `json:"id"`
-			Name       string      `json:"name"`
-			Appliances []appliance `json:"appliances"`
-		}
-		type descResp struct {
-			Processes []process `json:"processes"`
-		}
 		var desc descResp
 		if err := json.Unmarshal(body, &desc); err != nil {
 			return sender.Send(&backend.CallResourceResponse{
@@ -448,53 +653,12 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 				Body:   []byte("Failed to parse appliances: " + err.Error()),
 			})
 		}
-		// Fetch model info for each appliance in parallel
-		result := make([]map[string]string, 0)
-		type modelInfo struct {
-			FriendlyName string `json:"friendlyName"`
-		}
-		ch := make(chan map[string]string, 32)
-		count := 0
-		for _, proc := range desc.Processes {
-			for _, app := range proc.Appliances {
-				count++
-				go func(app appliance, procName string) {
-					label := app.FriendlyName
-					if label == "" {
-						label = app.ID
-					}
-					if procName != "" {
-						label = fmt.Sprintf("[%s] %s", procName, label)
-					}
-					modelLabel := ""
-					if app.ApplianceReference != 0 {
-						modelUrl := fmt.Sprintf("%s/v1/component/appliance/%d", d.baseURL, app.ApplianceReference)
-						reqModel, err := http.NewRequestWithContext(ctx, "GET", modelUrl, nil)
-						if err == nil {
-							reqModel.Header.Set("Authorization", "Bearer "+d.token)
-							reqModel.Header.Set("Accept", "application/json")
-							client := &http.Client{Timeout: 10 * time.Second}
-							respModel, err := client.Do(reqModel)
-							if err == nil && respModel.StatusCode == 200 {
-								defer respModel.Body.Close()
-								var model modelInfo
-								if err := json.NewDecoder(respModel.Body).Decode(&model); err == nil && model.FriendlyName != "" {
-									modelLabel = model.FriendlyName
-								}
-							}
-						}
-					}
-					if modelLabel != "" {
-						label = fmt.Sprintf("%s (%s)", label, modelLabel)
-					}
-					ch <- map[string]string{"id": app.ID, "label": label}
-				}(app, proc.Name)
-			}
-		}
-		for i := 0; i < count; i++ {
-			item := <-ch
-			result = append(result, item)
-		}
+		logDescription(endpointId, body, desc)
+
+		modelLabels := d.resolveModelLabels(ctx, desc.Processes)
+		result := buildApplianceOptions(desc.Processes, modelLabels)
+		backend.Logger.Info("appliance-list built options",
+			"endpointId", endpointId, "options", len(result))
 		respBytes, _ := json.Marshal(result)
 		return sender.Send(&backend.CallResourceResponse{
 			Status: http.StatusOK,
@@ -698,8 +862,8 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 				validValues = dp.ValidValues
 			}
 			// If type is BinarySetPoint or BinaryReading, set validValues to ["False", "True"]
-			 if dp.Type == "BinarySetPoint" || dp.Type == "BinaryReading" {
-			 	validValues = []string{"False", "True"}
+			if dp.Type == "BinarySetPoint" || dp.Type == "BinaryReading" {
+				validValues = []string{"False", "True"}
 			}
 		}
 		respMap := map[string]interface{}{"unit": unit}

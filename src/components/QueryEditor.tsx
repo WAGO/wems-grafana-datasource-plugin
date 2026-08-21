@@ -75,7 +75,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           label: ap.label || ap.id,
           value: ap.id,
         }));
-        opts.sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label));
+        // The backend order is meaningful: each appliance is followed by the
+        // appliance references pointing at it. Do not re-sort.
         setAppliances(opts);
         setLoadingAppliances(false);
       })
