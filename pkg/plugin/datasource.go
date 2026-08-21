@@ -181,6 +181,39 @@ type TimeSeriesDataPoint struct {
 	Value interface{} `json:"value"`
 }
 
+// toNullableFloat converts a WEMS datapoint value into the float64 Grafana plots.
+//
+// It returns nil when the value is absent (JSON null) or cannot be interpreted as a
+// number. That nil matters: a fabricated 0 is indistinguishable from a real reading, so
+// on a dashboard it shows as a dip and — more importantly — an alert rule evaluates it
+// as a genuine value instead of falling through to its No Data handling. Returning nil
+// renders a gap and lets the rule decide.
+func toNullableFloat(v interface{}) *float64 {
+	switch v := v.(type) {
+	case float64:
+		return &v
+	case int:
+		f := float64(v)
+		return &f
+	case int64:
+		f := float64(v)
+		return &f
+	case bool:
+		f := 0.0
+		if v {
+			f = 1.0
+		}
+		return &f
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return &f
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
 func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	if err := d.getTokenIfNeeded(ctx); err != nil {
 		return backend.ErrDataResponse(backend.StatusInternal, "Token error: "+err.Error())
@@ -256,34 +289,10 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 
 	// Convert to Grafana data frame
 	times := make([]time.Time, 0, len(points))
-	values := make([]float64, 0, len(points))
+	values := make([]*float64, 0, len(points))
 	for _, p := range points {
 		times = append(times, time.Unix(p.Time, 0))
-		// Try to convert value to float64
-		switch v := p.Value.(type) {
-		case float64:
-			values = append(values, v)
-		case int:
-			values = append(values, float64(v))
-		case int64:
-			values = append(values, float64(v))
-		case bool:
-			if v {
-				values = append(values, 1.0)
-			} else {
-				values = append(values, 0.0)
-			}
-		case string:
-			// Try to parse string as float
-			f, err := strconv.ParseFloat(v, 64)
-			if err == nil {
-				values = append(values, f)
-			} else {
-				values = append(values, 0)
-			}
-		default:
-			values = append(values, 0)
-		}
+		values = append(values, toNullableFloat(p.Value))
 	}
 
 	label := fmt.Sprintf("%s/%s/%s/%s", qm.EndpointID, qm.ApplianceID, qm.ServiceURI, qm.DataPoint)
