@@ -28,14 +28,17 @@ func (c *captureSender) Send(resp *backend.CallResourceResponse) error {
 // stubbed WEMS API: description fetch, parallel model-name resolution, flattening and
 // JSON encoding. This is the wiring that the pure buildApplianceOptions tests cannot
 // cover.
+// testEndpointID must be a well-formed UUID: CallResource rejects anything else.
+const testEndpointID = "11111111-2222-3333-4444-555555555555"
+
 func TestCallResourceApplianceList(t *testing.T) {
 	var modelCalls int64
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/description"):
-			if got := r.URL.Path; got != "/v1/endpoint/ep-1/description" {
-				t.Errorf("unexpected description path: %s", got)
+			if got, want := r.URL.Path, "/v1/endpoint/"+testEndpointID+"/description"; got != want {
+				t.Errorf("unexpected description path: %s, want %s", got, want)
 			}
 			fmt.Fprint(w, `{
 			  "building": {"spaces": [{"label": "Room 1"}]},
@@ -85,7 +88,7 @@ func TestCallResourceApplianceList(t *testing.T) {
 	sender := &captureSender{}
 	err := ds.CallResource(
 		context.Background(),
-		&backend.CallResourceRequest{Path: "appliance-list", URL: "appliance-list?endpointId=ep-1"},
+		&backend.CallResourceRequest{Path: "appliance-list", URL: "appliance-list?endpointId=" + testEndpointID},
 		sender,
 	)
 	if err != nil {
