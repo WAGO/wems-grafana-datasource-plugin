@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"sync"
@@ -19,6 +20,23 @@ import (
 )
 
 const DefaultBaseURL = "https://c1.api.wago.com/wems"
+
+// uuidPattern matches the UUID format WEMS uses for endpoint_id/appliance_id.
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// serviceOrDataPointPattern matches service_uri/data_point: letters, digits and single dots as separators.
+var serviceOrDataPointPattern = regexp.MustCompile(`^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$`)
+
+// isValidUUID reports whether s is a well-formed UUID, as required for endpoint_id/appliance_id.
+func isValidUUID(s string) bool {
+	return uuidPattern.MatchString(s)
+}
+
+// isValidServiceOrDataPoint reports whether s is a safe service_uri/data_point value
+// (alphanumeric segments separated by single dots, no path separators).
+func isValidServiceOrDataPoint(s string) bool {
+	return serviceOrDataPointPattern.MatchString(s)
+}
 
 // Make sure Datasource implements required interfaces. This is important to do
 // since otherwise we will only get a not implemented error response from plugin in
@@ -229,6 +247,12 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 	// Validate required fields
 	if qm.EndpointID == "" || qm.ApplianceID == "" || qm.ServiceURI == "" || qm.DataPoint == "" {
 		return backend.ErrDataResponse(backend.StatusBadRequest, "Missing required query fields: endpoint_id, appliance_id, service_uri, data_point")
+	}
+	if !isValidUUID(qm.EndpointID) || !isValidUUID(qm.ApplianceID) {
+		return backend.ErrDataResponse(backend.StatusBadRequest, "Invalid endpoint_id or appliance_id: must be a UUID")
+	}
+	if !isValidServiceOrDataPoint(qm.ServiceURI) || !isValidServiceOrDataPoint(qm.DataPoint) {
+		return backend.ErrDataResponse(backend.StatusBadRequest, "Invalid service_uri or data_point: only letters, digits and single dots are allowed")
 	}
 
 	// Build the WEMS API URL
@@ -623,6 +647,12 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 				Body:   []byte("Missing endpointId parameter"),
 			})
 		}
+		if !isValidUUID(endpointId) {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Invalid endpointId: must be a UUID"),
+			})
+		}
 		url := fmt.Sprintf("%s/v1/endpoint/%s/description?includeApplianceConfiguration=false&draft=false", d.baseURL, endpointId)
 		req2, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
@@ -688,6 +718,12 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 			return sender.Send(&backend.CallResourceResponse{
 				Status: http.StatusBadRequest,
 				Body:   []byte("Missing endpointId or applianceId parameter"),
+			})
+		}
+		if !isValidUUID(endpointId) || !isValidUUID(applianceId) {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Invalid endpointId or applianceId: must be a UUID"),
 			})
 		}
 		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s", d.baseURL, endpointId, applianceId)
@@ -761,6 +797,18 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 				Body:   []byte("Missing endpointId, applianceId, or serviceUri parameter"),
 			})
 		}
+		if !isValidUUID(endpointId) || !isValidUUID(applianceId) {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Invalid endpointId or applianceId: must be a UUID"),
+			})
+		}
+		if !isValidServiceOrDataPoint(serviceUri) {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Invalid serviceUri: only letters, digits and single dots are allowed"),
+			})
+		}
 		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s/%s", d.baseURL, endpointId, applianceId, serviceUri)
 		req2, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
@@ -816,6 +864,18 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 			return sender.Send(&backend.CallResourceResponse{
 				Status: http.StatusBadRequest,
 				Body:   []byte("Missing endpointId, applianceId, serviceUri, or datapoint parameter"),
+			})
+		}
+		if !isValidUUID(endpointId) || !isValidUUID(applianceId) {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Invalid endpointId or applianceId: must be a UUID"),
+			})
+		}
+		if !isValidServiceOrDataPoint(serviceUri) || !isValidServiceOrDataPoint(datapoint) {
+			return sender.Send(&backend.CallResourceResponse{
+				Status: http.StatusBadRequest,
+				Body:   []byte("Invalid serviceUri or datapoint: only letters, digits and single dots are allowed"),
 			})
 		}
 		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s/%s", d.baseURL, endpointId, applianceId, serviceUri)
