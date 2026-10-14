@@ -1,6 +1,6 @@
 {
   "name": "wems-grafana-plugin",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "scripts": {
     "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
     "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
@@ -61,11 +61,11 @@
   },
   "dependencies": {
     "@emotion/css": "11.10.6",
-    "@grafana/data": "^13.0.0",
-    "@grafana/i18n": "^13.0.0",
-    "@grafana/runtime": "^13.0.0",
-    "@grafana/schema": "^13.0.0",
-    "@grafana/ui": "^13.0.0",
+    "@grafana/data": "13.2.0",
+    "@grafana/i18n": "13.2.0",
+    "@grafana/runtime": "13.2.0",
+    "@grafana/schema": "13.2.0",
+    "@grafana/ui": "13.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

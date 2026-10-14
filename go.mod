@@ -1,6 +1,6 @@
 module github.com/wago/wems-grafana-plugin
 
-go 1.27.1
+go 1.27.2
 
 require github.com/grafana/grafana-plugin-sdk-go v0.296.5
 
@@ -75,7 +75,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	golang.org/x/exp v0.0.0-20261005173118-76772065c9b0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261005182115-fad411399dd8 // indirect
