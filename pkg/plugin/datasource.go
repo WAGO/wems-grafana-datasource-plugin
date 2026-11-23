@@ -24,8 +24,8 @@ const DefaultBaseURL = "https://c1.api.wago.com/wems"
 // uuidPattern matches the UUID format WEMS uses for endpoint_id/appliance_id.
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// serviceOrDataPointPattern matches service_uri/data_point: letters, digits and single dots as separators.
-var serviceOrDataPointPattern = regexp.MustCompile(`^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$`)
+// serviceOrDataPointPattern matches service_uri/data_point: letters, digits, dashes and underscores, with single dots as separators.
+var serviceOrDataPointPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$`)
 
 // isValidUUID reports whether s is a well-formed UUID, as required for endpoint_id/appliance_id.
 func isValidUUID(s string) bool {
@@ -33,7 +33,7 @@ func isValidUUID(s string) bool {
 }
 
 // isValidServiceOrDataPoint reports whether s is a safe service_uri/data_point value
-// (alphanumeric segments separated by single dots, no path separators).
+// (segments of letters, digits, dashes and underscores separated by single dots, no path separators).
 func isValidServiceOrDataPoint(s string) bool {
 	return serviceOrDataPointPattern.MatchString(s)
 }
@@ -252,7 +252,7 @@ func (d *Datasource) query(ctx context.Context, pCtx backend.PluginContext, quer
 		return backend.ErrDataResponse(backend.StatusBadRequest, "Invalid endpoint_id or appliance_id: must be a UUID")
 	}
 	if !isValidServiceOrDataPoint(qm.ServiceURI) || !isValidServiceOrDataPoint(qm.DataPoint) {
-		return backend.ErrDataResponse(backend.StatusBadRequest, "Invalid service_uri or data_point: only letters, digits and single dots are allowed")
+		return backend.ErrDataResponse(backend.StatusBadRequest, "Invalid service_uri or data_point: only letters, digits, dashes, underscores and single dots are allowed")
 	}
 
 	// Build the WEMS API URL
@@ -806,7 +806,7 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		if !isValidServiceOrDataPoint(serviceUri) {
 			return sender.Send(&backend.CallResourceResponse{
 				Status: http.StatusBadRequest,
-				Body:   []byte("Invalid serviceUri: only letters, digits and single dots are allowed"),
+				Body:   []byte("Invalid serviceUri: only letters, digits, dashes, underscores and single dots are allowed"),
 			})
 		}
 		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s/%s", d.baseURL, endpointId, applianceId, serviceUri)
@@ -875,7 +875,7 @@ func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResource
 		if !isValidServiceOrDataPoint(serviceUri) || !isValidServiceOrDataPoint(datapoint) {
 			return sender.Send(&backend.CallResourceResponse{
 				Status: http.StatusBadRequest,
-				Body:   []byte("Invalid serviceUri or datapoint: only letters, digits and single dots are allowed"),
+				Body:   []byte("Invalid serviceUri or datapoint: only letters, digits, dashes, underscores and single dots are allowed"),
 			})
 		}
 		url := fmt.Sprintf("%s/v1/endpoint/%s/values/%s/%s", d.baseURL, endpointId, applianceId, serviceUri)
